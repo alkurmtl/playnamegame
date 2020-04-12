@@ -160,6 +160,7 @@ def check_message(update, context):
         if update.message.text.lower() == ' '.join(games[group_id].words):
             games[group_id].round_going = False
             context.bot.send_message(chat_id=group_id, text=user_name(update.effective_user) + ' угадал!')
+            start_round(update, context)
             return
         guessed = 0
         for word in text:
