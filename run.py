@@ -115,7 +115,7 @@ def start_round(update, context):
     message_with_options += 'Отправь мне цифру, соответствующую фразе, которую хочешь объяснять:\n'
     for i in range(phrases_amount):
         message_with_options += str(i + 1) + '. ' + options[i] + '\n'
-    context.bot.send_message(chat_id=user.id, text=message_with_options,
+    context.bot.send_message(chat_id=leader.id, text=message_with_options,
                              reply_markup=ForceChoosePhrase(group_id, options)) # TODO bot may be unathorized to send msg to that user
 
 def stop_game(update, context):
