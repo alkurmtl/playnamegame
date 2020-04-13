@@ -112,6 +112,7 @@ def start_round(update, context):
     phrases_amount = 6
     options = get_phrases(phrases_amount)
     message_with_options = str(group_id) + '\n'
+    # TODO do this with inline keyboard
     message_with_options += 'Отправь мне цифру, соответствующую фразе, которую хочешь объяснять:\n'
     for i in range(phrases_amount):
         message_with_options += str(i + 1) + '. ' + options[i] + '\n'
