@@ -1,7 +1,7 @@
 import logging
 import random
 import string
-from telegram import ForceReply
+from operator import itemgetter
 from telegram import InlineKeyboardMarkup
 from telegram import InlineKeyboardButton
 from telegram.ext import Updater
@@ -47,13 +47,12 @@ def user_name(user):
         res += ' ' + user.last_name
     return res
 
-class ForceChoosePhrase(ForceReply):
-
-    def __init__(self, group_id, options, **kwargs):
-        super().__init__(**kwargs)
-        self.group_id = group_id
-        self.options = options
-
+def print_top(update, context, top):
+    group_id = update.effective_chat.id
+    message_text = 'Топ 10 по количеству побед:\n'
+    for place in top:
+        message_text += user_name(place[0]) + ' — ' + str(place[1]) + '\n'
+    context.bot.send_message(chat_id=group_id, text=message_text)
 
 class Game:
 
@@ -62,7 +61,9 @@ class Game:
         self.rounds = rounds
         self.words_options = []
         self.words = []
-        self.participants = set()
+        self.participants = dict() # user to wins
+        self.top = []
+        self.leader_candidates = set()
         self.leader_id = None
         self.round_going = False
 
@@ -89,29 +90,39 @@ def start_game(update, context):
         context.bot.send_message(chat_id=group_id, text='Игра на языке ' + lang +
                                                         ' до ' + str(wins) + ' побед началась!')
         games[group_id] = Game(lang, wins)
-        games[group_id].participants.add(update.effective_user)
+        games[group_id].participants[update.effective_user] = 0
+        games[group_id].leader_candidates.add(update.effective_user)
 
 def join_game(update, context):
     group_id = update.effective_chat.id
     user = update.effective_user
     if group_id not in games:
         context.bot.send_message(chat_id=group_id, text='В этом чате не идет игры')
-    games[group_id].participants.add(user)
+        return
+    if user in games[group_id].participants:
+        context.bot.send_message(chat_id=group_id, text=user_name(user) + ', ты уже в игре')
+        return
+    games[group_id].participants[update.effective_user] = 0
+    games[group_id].leader_candidates.add(user)
     context.bot.send_message(chat_id=group_id, text=user_name(user) + ' присоединился к игре!')
 
 def start_round(update, context):
     group_id = update.effective_chat.id
+    user = update.effective_user
     if group_id not in games:
         context.bot.send_message(chat_id=group_id, text='В этом чате не идет игры!')
         return
     if games[group_id].round_going:
         context.bot.send_message(chat_id=group_id, text='В этом чате уже идет раунд!')
         return
+    if user not in games[group_id].participants:
+        context.bot.send_message(chat_id=group_id, text=user_name(user) + ', сначала присоединись к игре!')
+        return
     games[group_id].round_going = True
-    user = update.effective_user
-    games[group_id].participants.add(user)
-    leader = list(games[group_id].participants)[random.randint(0, len(games[group_id].participants) - 1)]
-    # TODO choose only from non-ex participants
+    if len(games[group_id].leader_candidates) == 0:
+        games[group_id].leader_candidates = set(games[group_id].participants.keys())
+    leader = random.choice(tuple(games[group_id].leader_candidates))
+    games[group_id].leader_candidates.remove(leader)
     games[group_id].leader_id = leader.id
     phrases_amount = 6
     options = get_phrases(phrases_amount)
@@ -152,7 +163,23 @@ def check_message(update, context):
             games[group_id].words_options = []
             games[group_id].words = []
             context.bot.send_message(chat_id=group_id, text=user_name(update.effective_user) + ' угадал!')
-            start_round(update, context)
+            games[group_id].participants[update.effective_user] += 1
+            found = False
+            for i in range(len(games[group_id].top)):
+                if games[group_id].top[i][0].id == user_id:
+                    games[group_id].top[i][1] += 1
+                    found = True
+                    break
+            if not found:
+                games[group_id].top.append([update.effective_user, games[group_id].participants[update.effective_user]])
+            games[group_id].top.sort(key=itemgetter(1), reverse=True)
+            games[group_id].top = games[group_id].top[:10]
+            print_top(update, context, games[group_id].top)
+            if games[group_id].top[0][1] == games[group_id].rounds:
+                context.bot.send_message(chat_id=group_id, text=user_name(games[group_id].top[0][0]) + 'победил!')
+                stop_game(update, context)
+            else:
+                start_round(update, context)
             return
         guessed = 0
         for word in text:
