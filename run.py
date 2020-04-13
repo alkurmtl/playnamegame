@@ -5,6 +5,7 @@ import threading
 from operator import itemgetter
 from telegram import InlineKeyboardMarkup
 from telegram import InlineKeyboardButton
+from telegram import ParseMode
 from telegram.ext import Updater
 from telegram.ext import CommandHandler
 from telegram.ext import MessageHandler
@@ -42,11 +43,20 @@ def get_phrases(amount):
 
 games = dict()
 
-def user_name(user):
+def user_name(user, mention = False):
+    markdown = '_*[]()~`>#+-=|{}.!'
     res = user.first_name
     if user.last_name is not None:
         res += ' ' + user.last_name
-    return res
+    escaped_res = ''
+    for i in range(len(res)):
+        if res[i] in markdown:
+            escaped_res += '\\'
+        escaped_res += res[i]
+    if mention:
+        return '[' + escaped_res + '](tg://user?id=' + str(user.id) + ')'
+    else:
+        return res
 
 def print_top(update, context, top):
     group_id = update.effective_chat.id
@@ -147,12 +157,12 @@ def start_round(update, context, secondary = False):
         keyboard_markup.inline_keyboard[1].append(InlineKeyboardButton(str(i + 1), callback_data=str(i + 1)))
     keyboard_markup.inline_keyboard[0].append(InlineKeyboardButton("Посмотреть слова",
                                                                    callback_data="words"))
-    context.bot.send_message(chat_id=group_id, text='Раунд начался, ведущим был выбран ' + user_name(leader),
-                                 reply_markup=keyboard_markup)
+    context.bot.send_message(chat_id=group_id, text='Раунд начался, ведущим был выбран ' + user_name(leader, mention=True),
+                                 reply_markup=keyboard_markup, parse_mode=ParseMode.MARKDOWN_V2)
     games[group_id].timer = threading.Timer(60.0, restart_round, args=[update, context])
     games[group_id].timer.start()
-    # TODO wait for choice 60 seconds then choose another one
     # TODO mention leader
+
 def leave_game(update, context):
     group_id = update.effective_chat.id
     if group_id not in games:
@@ -167,16 +177,16 @@ def leave_game(update, context):
             context.bot.send_message(chat_id=group_id, text='Последний игрок покинул игру, завершаемся :(')
             stop_game(update, context)
             return
-        if user.id == game.leader_id:
-            end_round(group_id)
-            context.bot.send_message(chat_id=group_id, text=user_name(user) + ' был ведущим, начинаем новый раунд')
-            start_round(update, context, secondary=True)
         if user.id == game.starter_id:
             new_starter = random.choice(tuple(games[group_id].participants.keys()))
             game.starter_id = new_starter.id
             context.bot.send_message(chat_id=group_id,
-                                     text=user_name(user) + ' был администратором игры, теперь это '
-                                          + user_name(new_starter))
+                                     text='Администратор игры ее покинул, теперь это '
+                                          + user_name(new_starter, mention=True), parse_mode=ParseMode.MARKDOWN_V2)
+        if user.id == game.leader_id:
+            end_round(group_id)
+            context.bot.send_message(chat_id=group_id, text=user_name(user) + ' был ведущим, начинаем новый раунд')
+            start_round(update, context, secondary=True)
 
 def stop_game(update, context):
     group_id = update.effective_chat.id
