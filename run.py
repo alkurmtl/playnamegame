@@ -203,7 +203,8 @@ def stop_game(update, context):
                     allowed = True
                     break
         if allowed:
-            games[group_id].timer.cancel()
+            if games[group_id].timer is not None:
+                games[group_id].timer.cancel()
             context.bot.send_message(chat_id=group_id, text='Игра окончена!')
             games.pop(group_id)
         else:
