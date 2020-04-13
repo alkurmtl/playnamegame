@@ -54,6 +54,11 @@ def print_top(update, context, top):
         message_text += user_name(place[0]) + ' — ' + str(place[1]) + '\n'
     context.bot.send_message(chat_id=group_id, text=message_text)
 
+def end_round(group_id):
+    games[group_id].round_going = False
+    games[group_id].words_options = []
+    games[group_id].words = []
+
 class Game:
 
     def __init__(self, lang, rounds):
@@ -106,7 +111,7 @@ def join_game(update, context):
     games[group_id].leader_candidates.add(user)
     context.bot.send_message(chat_id=group_id, text=user_name(user) + ' присоединился к игре!')
 
-def start_round(update, context):
+def start_round(update, context, secondary = False):
     group_id = update.effective_chat.id
     user = update.effective_user
     if group_id not in games:
@@ -115,7 +120,7 @@ def start_round(update, context):
     if games[group_id].round_going:
         context.bot.send_message(chat_id=group_id, text='В этом чате уже идет раунд!')
         return
-    if user not in games[group_id].participants:
+    if not secondary and user not in games[group_id].participants:
         context.bot.send_message(chat_id=group_id, text=user_name(user) + ', сначала присоединись к игре!')
         return
     games[group_id].round_going = True
@@ -134,6 +139,26 @@ def start_round(update, context):
                                                                    callback_data="words"))
     context.bot.send_message(chat_id=group_id, text='Раунд начался, ведущим был выбран ' + user_name(leader),
                                  reply_markup=keyboard_markup)
+    # TODO wait for choice 60 seconds then choose another one
+
+def leave_game(update, context):
+    group_id = update.effective_chat.id
+    if group_id not in games:
+        return
+    game = games[group_id]
+    user = update.effective_user
+    res = game.participants.pop(user, None)
+    game.leader_candidates.discard(user)
+    if res is not None:
+        context.bot.send_message(chat_id=group_id, text=user_name(user) + ' покинул игру')
+        if len(game.participants) == 0:
+            context.bot.send_message(chat_id=group_id, text='Последний игрок покинул игру, завершаемся :(')
+            stop_game(update, context)
+            return
+        if user.id == game.leader_id:
+            end_round(group_id)
+            context.bot.send_message(chat_id=group_id, text=user_name(user) + ' был ведущим, начинаем новый раунд')
+            start_round(update, context, secondary=True)
 
 def stop_game(update, context):
     group_id = update.effective_chat.id
@@ -142,6 +167,7 @@ def stop_game(update, context):
         games.pop(group_id)
     else:
         context.bot.send_message(chat_id=group_id, text='В этом чате не идет игра!')
+# TODO let do this only to starter and admins?
 
 def check_message(update, context):
     group_id = update.effective_chat.id
@@ -159,9 +185,7 @@ def check_message(update, context):
         # TODO leader logic
     elif update.effective_user in games[group_id].participants:
         if update.message.text.lower() == ' '.join(games[group_id].words):
-            games[group_id].round_going = False
-            games[group_id].words_options = []
-            games[group_id].words = []
+            end_round(group_id)
             context.bot.send_message(chat_id=group_id, text=user_name(update.effective_user) + ' угадал!')
             games[group_id].participants[update.effective_user] += 1
             found = False
@@ -225,12 +249,16 @@ def check_callback(update, context):
                                  text='Теперь ты должен объяснить \"' + ' '.join(games[group_id].words) + '\"',
                                           show_alert=True)
 
+# TODO leave game
+
 start_game_handler = CommandHandler('start_game', start_game)
 dispatcher.add_handler(start_game_handler)
 join_game_handler = CommandHandler('join_game', join_game)
 dispatcher.add_handler(join_game_handler)
 start_round_handler = CommandHandler('start_round', start_round)
 dispatcher.add_handler(start_round_handler)
+leave_game_handler = CommandHandler('leave_game', leave_game)
+dispatcher.add_handler(leave_game_handler)
 stop_game_handler = CommandHandler('stop_game', stop_game)
 dispatcher.add_handler(stop_game_handler)
 msg_handler = MessageHandler(Filters.text, check_message)
