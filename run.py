@@ -21,14 +21,14 @@ updater = Updater(token=token, use_context=True)
 token_file.close()
 dispatcher = updater.dispatcher
 
-phrases = ["вещий сон", "вечный сон", "несбывшаяся надежда",
-           "пальмовое масло", "прогрессивная любовь", "реверсивная психология",
-           "литературный хулиган", "солнечный луч", "голый король",
-           "героиновый сон", "водяной пистолет", "цыганский табор",
-           "коварный сон", "идеальный люди", "долбаная жизнь",
-           "мебельный гипермаркет", "черно-белый фильм", "кислотные вставки",
-           "жуткая ночь", "теплая пасть", "героиновый торч",
-           "наглядный пример", "высокая ставка", "грубая ошибка"]
+
+
+phrases = []
+phrases_file = open('phrases.txt', 'r', encoding='utf-8')
+for line in phrases_file:
+    phrases.append(line.rstrip('\n'))
+phrases_file.close()
+print('Done reading phrases from file')
 
 def get_phrase():
     return phrases[random.randint(0, len(phrases) - 1)]
@@ -176,7 +176,7 @@ def check_message(update, context):
             games[group_id].top = games[group_id].top[:10]
             print_top(update, context, games[group_id].top)
             if games[group_id].top[0][1] == games[group_id].rounds:
-                context.bot.send_message(chat_id=group_id, text=user_name(games[group_id].top[0][0]) + 'победил!')
+                context.bot.send_message(chat_id=group_id, text=user_name(games[group_id].top[0][0]) + ' победил!')
                 stop_game(update, context)
             else:
                 start_round(update, context)
