@@ -71,6 +71,7 @@ class Game:
         self.leader_candidates = set()
         self.leader_id = None
         self.round_going = False
+        self.starter_id = None
 
 def start_game(update, context):
     group_id = update.effective_chat.id
@@ -95,6 +96,7 @@ def start_game(update, context):
         context.bot.send_message(chat_id=group_id, text='Игра на языке ' + lang +
                                                         ' до ' + str(wins) + ' побед началась!')
         games[group_id] = Game(lang, wins)
+        games[group_id].starter_id = update.effective_user.id
         games[group_id].participants[update.effective_user] = 0
         games[group_id].leader_candidates.add(update.effective_user)
 
@@ -159,15 +161,35 @@ def leave_game(update, context):
             end_round(group_id)
             context.bot.send_message(chat_id=group_id, text=user_name(user) + ' был ведущим, начинаем новый раунд')
             start_round(update, context, secondary=True)
+        if user.id == game.starter_id:
+            new_starter = random.choice(tuple(games[group_id].participants.keys()))
+            game.starter_id = new_starter.id
+            context.bot.send_message(chat_id=group_id,
+                                     text=user_name(user) + ' был администратором игры, теперь это '
+                                          + user_name(new_starter))
 
 def stop_game(update, context):
     group_id = update.effective_chat.id
+    user_id = update.effective_user.id
     if group_id in games:
-        context.bot.send_message(chat_id=group_id, text='Игра окончена!')
-        games.pop(group_id)
+        game = games[group_id]
+        allowed = False
+        if user_id == game.starter_id:
+            allowed = True
+        else:
+            admins = context.bot.get_chat_administrators(chat_id=group_id)
+            for admin in admins:
+                if user_id == admin.user.id:
+                    allowed = True
+                    break
+        if allowed:
+            context.bot.send_message(chat_id=group_id, text='Игра окончена!')
+            games.pop(group_id)
+        else:
+            context.bot.send_message(chat_id=group_id, text='Игру может завершить только '
+                                                            'администратор игры или чата')
     else:
         context.bot.send_message(chat_id=group_id, text='В этом чате не идет игра!')
-# TODO let do this only to starter and admins?
 
 def check_message(update, context):
     group_id = update.effective_chat.id
@@ -248,8 +270,6 @@ def check_callback(update, context):
         context.bot.answer_callback_query(callback_query_id=callback.id,
                                  text='Теперь ты должен объяснить \"' + ' '.join(games[group_id].words) + '\"',
                                           show_alert=True)
-
-# TODO leave game
 
 start_game_handler = CommandHandler('start_game', start_game)
 dispatcher.add_handler(start_game_handler)
