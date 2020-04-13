@@ -1,6 +1,7 @@
 import logging
 import random
 import string
+import threading
 from operator import itemgetter
 from telegram import InlineKeyboardMarkup
 from telegram import InlineKeyboardButton
@@ -59,6 +60,12 @@ def end_round(group_id):
     games[group_id].words_options = []
     games[group_id].words = []
 
+def restart_round(update, context):
+    group_id = update.effective_chat.id
+    context.bot.send_message(chat_id=group_id, text='Ведущий слишком долго выбирал слово, начинаем новый раунд')
+    end_round(group_id)
+    start_round(update, context, True)
+
 class Game:
 
     def __init__(self, lang, rounds):
@@ -72,6 +79,7 @@ class Game:
         self.leader_id = None
         self.round_going = False
         self.starter_id = None
+        self.timer = None
 
 def start_game(update, context):
     group_id = update.effective_chat.id
@@ -141,8 +149,10 @@ def start_round(update, context, secondary = False):
                                                                    callback_data="words"))
     context.bot.send_message(chat_id=group_id, text='Раунд начался, ведущим был выбран ' + user_name(leader),
                                  reply_markup=keyboard_markup)
+    games[group_id].timer = threading.Timer(60.0, restart_round, args=[update, context])
+    games[group_id].timer.start()
     # TODO wait for choice 60 seconds then choose another one
-
+    # TODO mention leader
 def leave_game(update, context):
     group_id = update.effective_chat.id
     if group_id not in games:
@@ -270,6 +280,7 @@ def check_callback(update, context):
         context.bot.answer_callback_query(callback_query_id=callback.id,
                                  text='Теперь ты должен объяснить \"' + ' '.join(games[group_id].words) + '\"',
                                           show_alert=True)
+        games[group_id].timer.cancel()
 
 start_game_handler = CommandHandler('start_game', start_game)
 dispatcher.add_handler(start_game_handler)
