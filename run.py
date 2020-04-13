@@ -141,7 +141,7 @@ def check_message(update, context):
     user_id = update.effective_user.id
     text = update.message.text.split()
     for i in range(len(text)):
-        text[i] = text[i].translate(str.maketrans(dict.fromkeys(string.punctuation))) # TODO doesn't work
+        text[i] = text[i].translate(str.maketrans(dict.fromkeys(string.punctuation)))
         text[i] = text[i].lower()
     if user_id == games[group_id].leader_id:
         must_do = 'something'
