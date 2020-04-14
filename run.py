@@ -67,6 +67,8 @@ def normalize(s):
 
 def get_roots(s): # TODO several roots
     norm = morph.parse(normalize(s))[0].normal_form
+    if len(norm) == 0:
+        return []
     try:
         url = 'http://morphemeonline.ru/' + quote(norm[0].upper() + '/' + norm)
         req = urllib.request.urlopen(url)
@@ -175,7 +177,6 @@ def start_round(update, context, secondary = False):
     if not secondary and user not in games[group_id].participants:
         context.bot.send_message(chat_id=group_id, text=user_name(user) + ', сначала присоединись к игре!')
         return
-    games[group_id].round_going = True
     if len(games[group_id].leader_candidates) == 0:
         games[group_id].leader_candidates = set(games[group_id].participants.keys())
     leader = random.choice(tuple(games[group_id].leader_candidates))
@@ -335,6 +336,7 @@ def check_callback(update, context):
                                  text='Теперь ты должен объяснить \"' + ' '.join(games[group_id].words) + '\"',
                                           show_alert=True)
         games[group_id].timer.cancel()
+        games[group_id].round_going = True
         for word in games[group_id].words:
             for root in get_roots(word):
                 games[group_id].roots.append(root)
