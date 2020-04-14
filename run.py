@@ -58,6 +58,9 @@ def user_name(user, mention = False):
     else:
         return res
 
+def normalize(s):
+    return s.translate(str.maketrans(dict.fromkeys(string.punctuation))).lower()
+
 def print_top(update, context, top):
     group_id = update.effective_chat.id
     message_text = 'Топ 10 по количеству побед:\n'
@@ -222,13 +225,13 @@ def check_message(update, context):
     user_id = update.effective_user.id
     text = update.message.text.split()
     for i in range(len(text)):
-        text[i] = text[i].translate(str.maketrans(dict.fromkeys(string.punctuation)))
+        text[i] = normalize(text[i])
         text[i] = text[i].lower()
     if user_id == games[group_id].leader_id:
         must_do = 'something'
         # TODO leader logic
     elif update.effective_user in games[group_id].participants:
-        if update.message.text.lower() == ' '.join(games[group_id].words):
+        if normalize(update.message.text) == ' '.join(games[group_id].words):
             end_round(group_id)
             context.bot.send_message(chat_id=group_id, text=user_name(update.effective_user) + ' угадал!')
             games[group_id].participants[update.effective_user] += 1
