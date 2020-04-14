@@ -277,7 +277,6 @@ def check_callback(update, context):
         return
     if callback.data == "words":
         if len(games[group_id].words) == 0:
-            print('\n'.join(games[group_id].words_options))
             context.bot.answer_callback_query(callback_query_id=callback.id,
                                               text='\n'.join(games[group_id].words_options), show_alert=True)
         else:
