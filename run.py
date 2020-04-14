@@ -2,6 +2,10 @@ import logging
 import random
 import string
 import threading
+import urllib.request
+from urllib.parse import quote
+from urllib.error import HTTPError
+import pymorphy2
 from operator import itemgetter
 from telegram import InlineKeyboardMarkup
 from telegram import InlineKeyboardButton
@@ -23,7 +27,7 @@ updater = Updater(token=token, use_context=True)
 token_file.close()
 dispatcher = updater.dispatcher
 
-
+morph = pymorphy2.MorphAnalyzer()
 
 phrases = []
 phrases_file = open('phrases.txt', 'r', encoding='utf-8')
@@ -61,6 +65,29 @@ def user_name(user, mention = False):
 def normalize(s):
     return s.translate(str.maketrans(dict.fromkeys(string.punctuation))).lower()
 
+def get_roots(s): # TODO several roots
+    norm = morph.parse(normalize(s))[0].normal_form
+    try:
+        url = 'http://morphemeonline.ru/' + quote(norm[0].upper() + '/' + norm)
+        req = urllib.request.urlopen(url)
+    except HTTPError:
+        return []
+    page_code = req.read().decode('utf-8')
+    index = 0
+    roots = []
+    while index < len(page_code):
+        pos = page_code.find('title="корень"', index)
+        if pos == -1:
+            break
+        pos += len('title="корень"') + 1
+        root = ''
+        while page_code[pos] != '<':
+            root += page_code[pos]
+            pos += 1
+        index = pos
+        roots.append(root)
+    return roots
+
 def print_top(update, context, top):
     group_id = update.effective_chat.id
     message_text = 'Топ 10 по количеству побед:\n'
@@ -72,6 +99,7 @@ def end_round(group_id):
     games[group_id].round_going = False
     games[group_id].words_options = []
     games[group_id].words = []
+    games[group_id].roots = []
 
 def restart_round(update, context):
     group_id = update.effective_chat.id
@@ -86,6 +114,7 @@ class Game:
         self.rounds = rounds
         self.words_options = []
         self.words = []
+        self.roots = []
         self.participants = dict() # user to wins
         self.top = []
         self.leader_candidates = set()
@@ -164,7 +193,6 @@ def start_round(update, context, secondary = False):
                                  reply_markup=keyboard_markup, parse_mode=ParseMode.MARKDOWN_V2)
     games[group_id].timer = threading.Timer(60.0, restart_round, args=[update, context])
     games[group_id].timer.start()
-    # TODO mention leader
 
 def leave_game(update, context):
     group_id = update.effective_chat.id
@@ -228,8 +256,20 @@ def check_message(update, context):
         text[i] = normalize(text[i])
         text[i] = text[i].lower()
     if user_id == games[group_id].leader_id:
-        must_do = 'something'
-        # TODO leader logic
+        for word in text:
+            banned = False
+            for root in get_roots(morph.parse(word)[0].normal_form):
+                for game_root in games[group_id].roots:
+                    if root.find(game_root) == 0 or game_root.find(root) == 0:
+                        banned = True
+                        break
+                        # TODO may be not the best way to compare roots
+            if banned:
+                context.bot.send_message(chat_id=group_id, text='Ведущий использовал однокоренное слово :(\n' +
+                                                                'Было загадано: ' + ' '.join(games[group_id].words)
+                                                                + '\nНачинаем новый раунд')
+                end_round(group_id)
+                start_round(update, context, secondary=True)
     elif update.effective_user in games[group_id].participants:
         if normalize(update.message.text) == ' '.join(games[group_id].words):
             end_round(group_id)
@@ -295,6 +335,9 @@ def check_callback(update, context):
                                  text='Теперь ты должен объяснить \"' + ' '.join(games[group_id].words) + '\"',
                                           show_alert=True)
         games[group_id].timer.cancel()
+        for word in games[group_id].words:
+            for root in get_roots(word):
+                games[group_id].roots.append(root)
 
 start_game_handler = CommandHandler('start_game', start_game)
 dispatcher.add_handler(start_game_handler)
