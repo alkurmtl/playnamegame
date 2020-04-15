@@ -18,7 +18,8 @@ from telegram.ext import Filters
 from telegram.ext import CallbackQueryHandler
 
 BOT_ID = 1105629394
-START_STRING = ', введи язык и количество раундов в формате "<ru или en\> <число от 1 до 100000\>"'
+START_STRING = ', введи язык и количество раундов в формате "<ru или en\> <число от 1 до 100000\>". Прочитать' \
+               ' правила игры: /rules'
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -271,6 +272,29 @@ def stop_game(update, context):
         context.bot.send_message(chat_id=group_id, text='В этом чате не идет игра!')
 
 
+def rules(update, context):
+    rules_msg = 'Для того, чтобы начать игру, напишите /start_game и следуйте инструкциям\n' \
+                'После того, как игра начата, все желающие могут присоединиться к ней, написав /join_game\n' \
+                'Как только присоединилось достаточно человек, можно начать раунд: /start_round\n' \
+                'После этого случайным образом выберется ведущий. Ему нужно будет посмотреть предложенные ' \
+                'ему словосочетания, нажав на кнопку "Посмотреть слова", а затем, выбрав одно из них, нажав на кнопку ' \
+                'с соответствующей цифрой. После этого сменить выбор будет нельзя, а выбранное словосочетание можно ' \
+                'будет посмотреть, нажав на любую из кнопок. Если ведущий не выберет слово в течение минуты, ' \
+                'случайным образом выберется другой ведущий.\n' \
+                'Сама игра происходит таким образом: игроки могут спрашивать у ведущего про выбранное им ' \
+                'словосочетание, а ведущий может отвечать на них, не используя однокоренные с загаданными слова. ' \
+                'Если он использует однокоренное, то раунд закончится, а ведущим станет другой игрок. ' \
+                'Как только кто-то из игроков произнес несколько из загаданных слов, ему начислится столько же очков, ' \
+                'а отгаданные слова откроются. ' \
+                'Если кто-то из игроков произнесет уже угаданные слова, то ему ничего за них не начислится. ' \
+                'Как только будут отгаданы все слова, ведущему за старания начислится одно очко, и автоматически ' \
+                'начнется следующий раунд, где будет выбран уже другой ведущий.\n' \
+                'Если кому-то надоело играть, он может покинуть игру (чтобы его не выбирало ведущим) ' \
+                'с помощью /leave_game\n' \
+                'Если вдруг понадобилось досрочно закончить игру, администраторы чата и игрок, стартовавший игру, ' \
+                '(я называю его "администратор игры") могут сделать это с помощью /stop_game'
+    context.bot.send_message(chat_id=update.effective_chat.id, text=rules_msg)
+
 def check_message(update, context):
     group_id = update.effective_chat.id
     if group_id not in games:
@@ -369,7 +393,8 @@ def check_message(update, context):
             context.bot.send_message(chat_id=group_id, text=user_name(update.effective_user) + ' угадал!')
             add_points(group_id, game.leader, 1)
             print_top(update, context, game.top)
-            if game.top[0][1] == game.rounds:
+            game.rounds -= 1
+            if game.rounds == 0:
                 context.bot.send_message(chat_id=group_id, text=user_name(game.top[0][0]) + ' победил!')
                 stop_game(update, context)
             else:
@@ -427,6 +452,8 @@ leave_game_handler = CommandHandler('leave_game', leave_game)
 dispatcher.add_handler(leave_game_handler)
 stop_game_handler = CommandHandler('stop_game', stop_game)
 dispatcher.add_handler(stop_game_handler)
+rules_handler = CommandHandler('rules', rules)
+dispatcher.add_handler(rules_handler)
 msg_handler = MessageHandler(Filters.text, check_message)
 dispatcher.add_handler(msg_handler)
 callback_handler = CallbackQueryHandler(check_callback)
