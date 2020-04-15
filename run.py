@@ -101,10 +101,11 @@ def get_roots(s):
 
 def print_top(update, context, top):
     group_id = update.effective_chat.id
-    message_text = 'Топ 10 по количеству побед:\n'
+    message_text = 'Топ 10 по количеству очков:\n'
     for place in top:
         message_text += user_name(place[0]) + ' — ' + str(place[1]) + '\n'
     context.bot.send_message(chat_id=group_id, text=message_text)
+
 
 def send_start_game_message(update, context):
     context.bot.send_message(chat_id=update.effective_chat.id,
@@ -112,11 +113,13 @@ def send_start_game_message(update, context):
                              reply_markup=ForceReply(selective=True),
                              parse_mode=ParseMode.MARKDOWN_V2)
 
+
 def end_round(group_id):
     game = games[group_id]
     game.round_going = False
     game.words_options = []
     game.words = []
+    game.guessed = []
     game.roots = []
     if game.timer is not None:
         game.timer.cancel()
@@ -128,6 +131,19 @@ def restart_round(update, context):
     end_round(group_id)
     start_round(update, context, True)
 
+def add_points(group_id, user, score):
+    game = games[group_id]
+    game.participants[user] += score
+    found = False
+    for i in range(len(game.top)):
+        if game.top[i][0].id == user.id:
+            game.top[i][1] += score
+            found = True
+            break
+    if not found:
+        game.top.append([user, game.participants[user]])
+    game.top.sort(key=itemgetter(1), reverse=True)
+    game.top = game.top[:10]
 
 class Game:
 
@@ -136,11 +152,12 @@ class Game:
         self.rounds = rounds
         self.words_options = []
         self.words = []
+        self.guessed = []
         self.roots = []
         self.participants = dict()  # user to wins
         self.top = []
         self.leader_candidates = set()
-        self.leader_id = None
+        self.leader = None
         self.round_going = False
         self.starter_id = None
         self.timer = None
@@ -186,7 +203,7 @@ def start_round(update, context, secondary=False):
         game.leader_candidates = set(game.participants.keys())
     leader = random.choice(tuple(game.leader_candidates))
     game.leader_candidates.remove(leader)
-    game.leader_id = leader.id
+    game.leader = leader
     phrases_amount = 6
     options = get_phrases(phrases_amount)
     keyboard_markup = InlineKeyboardMarkup([[], []])
@@ -222,7 +239,7 @@ def leave_game(update, context):
             context.bot.send_message(chat_id=group_id,
                                      text='Администратор игры ее покинул, теперь это '
                                           + user_name(new_starter, mention=True), parse_mode=ParseMode.MARKDOWN_V2)
-        if user.id == game.leader_id:
+        if user.id == game.leader.id:
             end_round(group_id)
             context.bot.send_message(chat_id=group_id, text=user_name(user) + ' был ведущим, начинаем новый раунд')
             start_round(update, context, secondary=True)
@@ -292,7 +309,7 @@ def check_message(update, context):
     for i in range(len(text)):
         text[i] = normalize(text[i])
         text[i] = text[i].lower()
-    if user_id == game.leader_id:
+    if user_id == game.leader.id:
         for word in text:
             banned = False
             for root in get_roots(morph.parse(word)[0].normal_form):
@@ -309,20 +326,38 @@ def check_message(update, context):
                 end_round(group_id)
                 start_round(update, context, secondary=True)
     elif update.effective_user in game.participants:
+        guessed = 0
+        score = 0
+        for word in text:
+            norm_word = morph.parse(word)[0].normal_form
+            for i in range(len(game.words)):
+                norm_game_word = morph.parse(game.words[i])[0].normal_form
+                if norm_word == norm_game_word:
+                    if not game.guessed[i]:
+                        score += 1
+                        game.guessed[i] = True
+                    guessed += 1
+        if guessed > 0:
+            msg = user_name(update.effective_user) + ' угадал ' + str(guessed)
+            if guessed == 1:
+                msg += ' слово'
+            elif 2 <= guessed <= 4:
+                msg += ' слова'
+            else:
+                msg += ' слов'
+            msg += ' и получает ' + str(score)
+            if score == 1:
+                msg += ' очко'
+            elif 2 <= score <= 4:
+                msg += ' очка'
+            else:
+                msg += ' очков'
+            add_points(group_id, update.effective_user, score)
+            context.bot.send_message(chat_id=group_id, text=msg)
         if normalize(update.message.text) == ' '.join(game.words):
             end_round(group_id)
             context.bot.send_message(chat_id=group_id, text=user_name(update.effective_user) + ' угадал!')
-            game.participants[update.effective_user] += 1
-            found = False
-            for i in range(len(game.top)):
-                if game.top[i][0].id == user_id:
-                    game.top[i][1] += 1
-                    found = True
-                    break
-            if not found:
-                game.top.append([update.effective_user, game.participants[update.effective_user]])
-            game.top.sort(key=itemgetter(1), reverse=True)
-            game.top = game.top[:10]
+            add_points(group_id, game.leader, 1)
             print_top(update, context, game.top)
             if game.top[0][1] == game.rounds:
                 context.bot.send_message(chat_id=group_id, text=user_name(game.top[0][0]) + ' победил!')
@@ -330,19 +365,6 @@ def check_message(update, context):
             else:
                 start_round(update, context)
             return
-        guessed = 0
-        for word in text:
-            if word in game.words:
-                guessed += 1
-        if guessed > 0:
-            msg = user_name(update.effective_user) + ' угадал ' + str(guessed)
-            if guessed == 1:
-                msg += ' слово!'
-            elif 2 <= guessed <= 4:
-                msg += ' слова!'
-            else:
-                msg += ' слов!'
-            context.bot.send_message(chat_id=group_id, text=msg)
 
 
 def check_callback(update, context):
@@ -353,7 +375,7 @@ def check_callback(update, context):
         context.bot.answer_callback_query(callback_query_id=callback.id, text='Игра кончилась!', show_alert=True)
         return
     game = games[group_id]
-    if user_id != game.leader_id:
+    if user_id != game.leader.id:
         context.bot.answer_callback_query(callback_query_id=callback.id, text='Ты не ведущий!', show_alert=True)
         return
     if callback.data is None:
@@ -381,6 +403,8 @@ def check_callback(update, context):
         for word in game.words:
             for root in get_roots(word):
                 game.roots.append(root)
+        for word in game.words:
+            game.guessed.append(False)
 
 
 start_game_handler = CommandHandler('start_game', start_game)
