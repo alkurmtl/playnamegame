@@ -339,8 +339,10 @@ def check_message(update, context):
                 for game_root in game.roots:
                     lcp = 0
                     while lcp < min(len(root), len(game_root)):
-                        if root[lcp] == game_root[lcp]:
-                            lcp += 1
+                       if root[lcp] == game_root[lcp]:
+                           lcp += 1
+                       else:
+                           break
                     if lcp + 1 >= min(len(root), len(game_root)):
                         banned = True
                         break
