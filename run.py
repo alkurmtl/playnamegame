@@ -19,7 +19,7 @@ from telegram.ext import CallbackQueryHandler
 BOT_ID = 1105629394
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                     level=logging.INFO)
+                    level=logging.INFO)
 
 token_file = open("token.txt", "r")
 token = token_file.readline().rstrip('\n')
@@ -36,8 +36,10 @@ for line in phrases_file:
 phrases_file.close()
 print('Done reading phrases from file')
 
+
 def get_phrase():
     return phrases[random.randint(0, len(phrases) - 1)]
+
 
 def get_phrases(amount):
     res = []
@@ -45,9 +47,11 @@ def get_phrases(amount):
         res.append(get_phrase())
     return res
 
+
 games = dict()
 
-def user_name(user, mention = False):
+
+def user_name(user, mention=False):
     markdown = '_*[]()~`>#+-=|{}.!'
     res = user.first_name
     if user.last_name is not None:
@@ -62,10 +66,12 @@ def user_name(user, mention = False):
     else:
         return res
 
+
 def normalize(s):
     return s.translate(str.maketrans(dict.fromkeys(string.punctuation))).lower()
 
-def get_roots(s): # TODO several roots
+
+def get_roots(s):  # TODO several roots
     norm = morph.parse(normalize(s))[0].normal_form
     if len(norm) == 0:
         return []
@@ -90,6 +96,7 @@ def get_roots(s): # TODO several roots
         roots.append(root)
     return roots
 
+
 def print_top(update, context, top):
     group_id = update.effective_chat.id
     message_text = 'Топ 10 по количеству побед:\n'
@@ -97,17 +104,22 @@ def print_top(update, context, top):
         message_text += user_name(place[0]) + ' — ' + str(place[1]) + '\n'
     context.bot.send_message(chat_id=group_id, text=message_text)
 
+
 def end_round(group_id):
-    games[group_id].round_going = False
-    games[group_id].words_options = []
-    games[group_id].words = []
-    games[group_id].roots = []
+    game = games[group_id]
+    game.round_going = False
+    game.words_options = []
+    game.words = []
+    game.roots = []
+    game.timer.cancel()
+
 
 def restart_round(update, context):
     group_id = update.effective_chat.id
     context.bot.send_message(chat_id=group_id, text='Ведущий слишком долго выбирал слово, начинаем новый раунд')
     end_round(group_id)
     start_round(update, context, True)
+
 
 class Game:
 
@@ -117,13 +129,14 @@ class Game:
         self.words_options = []
         self.words = []
         self.roots = []
-        self.participants = dict() # user to wins
+        self.participants = dict()  # user to wins
         self.top = []
         self.leader_candidates = set()
         self.leader_id = None
         self.round_going = False
         self.starter_id = None
         self.timer = None
+
 
 def start_game(update, context):
     group_id = update.effective_chat.id
@@ -148,9 +161,11 @@ def start_game(update, context):
         context.bot.send_message(chat_id=group_id, text='Игра на языке ' + lang +
                                                         ' до ' + str(wins) + ' побед началась!')
         games[group_id] = Game(lang, wins)
-        games[group_id].starter_id = update.effective_user.id
-        games[group_id].participants[update.effective_user] = 0
-        games[group_id].leader_candidates.add(update.effective_user)
+        game = games[group_id]
+        game.starter_id = update.effective_user.id
+        game.participants[update.effective_user] = 0
+        game.leader_candidates.add(update.effective_user)
+
 
 def join_game(update, context):
     group_id = update.effective_chat.id
@@ -158,42 +173,47 @@ def join_game(update, context):
     if group_id not in games:
         context.bot.send_message(chat_id=group_id, text='В этом чате не идет игры')
         return
-    if user in games[group_id].participants:
+    game = games[group_id]
+    if user in game.participants:
         context.bot.send_message(chat_id=group_id, text=user_name(user) + ', ты уже в игре')
         return
-    games[group_id].participants[update.effective_user] = 0
-    games[group_id].leader_candidates.add(user)
+    game.participants[update.effective_user] = 0
+    game.leader_candidates.add(user)
     context.bot.send_message(chat_id=group_id, text=user_name(user) + ' присоединился к игре!')
 
-def start_round(update, context, secondary = False):
+
+def start_round(update, context, secondary=False):
     group_id = update.effective_chat.id
     user = update.effective_user
     if group_id not in games:
         context.bot.send_message(chat_id=group_id, text='В этом чате не идет игры!')
         return
-    if games[group_id].round_going:
+    game = games[group_id]
+    if game.round_going:
         context.bot.send_message(chat_id=group_id, text='В этом чате уже идет раунд!')
         return
-    if not secondary and user not in games[group_id].participants:
+    if not secondary and user not in game.participants:
         context.bot.send_message(chat_id=group_id, text=user_name(user) + ', сначала присоединись к игре!')
         return
-    if len(games[group_id].leader_candidates) == 0:
-        games[group_id].leader_candidates = set(games[group_id].participants.keys())
-    leader = random.choice(tuple(games[group_id].leader_candidates))
-    games[group_id].leader_candidates.remove(leader)
-    games[group_id].leader_id = leader.id
+    if len(game.leader_candidates) == 0:
+        game.leader_candidates = set(game.participants.keys())
+    leader = random.choice(tuple(game.leader_candidates))
+    game.leader_candidates.remove(leader)
+    game.leader_id = leader.id
     phrases_amount = 6
     options = get_phrases(phrases_amount)
     keyboard_markup = InlineKeyboardMarkup([[], []])
     for i in range(phrases_amount):
-        games[group_id].words_options.append(str(i + 1) + '. ' + options[i])
+        game.words_options.append(str(i + 1) + '. ' + options[i])
         keyboard_markup.inline_keyboard[1].append(InlineKeyboardButton(str(i + 1), callback_data=str(i + 1)))
     keyboard_markup.inline_keyboard[0].append(InlineKeyboardButton("Посмотреть слова",
                                                                    callback_data="words"))
-    context.bot.send_message(chat_id=group_id, text='Раунд начался, ведущим был выбран ' + user_name(leader, mention=True),
-                                 reply_markup=keyboard_markup, parse_mode=ParseMode.MARKDOWN_V2)
-    games[group_id].timer = threading.Timer(60.0, restart_round, args=[update, context])
-    games[group_id].timer.start()
+    context.bot.send_message(chat_id=group_id,
+                             text='Раунд начался, ведущим был выбран ' + user_name(leader, mention=True),
+                             reply_markup=keyboard_markup, parse_mode=ParseMode.MARKDOWN_V2)
+    game.timer = threading.Timer(60.0, restart_round, args=[update, context])
+    game.timer.start()
+
 
 def leave_game(update, context):
     group_id = update.effective_chat.id
@@ -210,7 +230,7 @@ def leave_game(update, context):
             stop_game(update, context)
             return
         if user.id == game.starter_id:
-            new_starter = random.choice(tuple(games[group_id].participants.keys()))
+            new_starter = random.choice(tuple(game.participants.keys()))
             game.starter_id = new_starter.id
             context.bot.send_message(chat_id=group_id,
                                      text='Администратор игры ее покинул, теперь это '
@@ -219,6 +239,7 @@ def leave_game(update, context):
             end_round(group_id)
             context.bot.send_message(chat_id=group_id, text=user_name(user) + ' был ведущим, начинаем новый раунд')
             start_round(update, context, secondary=True)
+
 
 def stop_game(update, context):
     group_id = update.effective_chat.id
@@ -235,8 +256,8 @@ def stop_game(update, context):
                     allowed = True
                     break
         if allowed:
-            if games[group_id].timer is not None:
-                games[group_id].timer.cancel()
+            if game.timer is not None:
+                game.timer.cancel()
             context.bot.send_message(chat_id=group_id, text='Игра окончена!')
             games.pop(group_id)
         else:
@@ -245,57 +266,60 @@ def stop_game(update, context):
     else:
         context.bot.send_message(chat_id=group_id, text='В этом чате не идет игра!')
 
+
 def check_message(update, context):
     group_id = update.effective_chat.id
     if group_id not in games:
         return
-    if not games[group_id].round_going:
+    game = games[group_id]
+    if not game.round_going:
         return
     user_id = update.effective_user.id
     text = update.message.text.split()
     for i in range(len(text)):
         text[i] = normalize(text[i])
         text[i] = text[i].lower()
-    if user_id == games[group_id].leader_id:
+    if user_id == game.leader_id:
         for word in text:
             banned = False
             for root in get_roots(morph.parse(word)[0].normal_form):
-                for game_root in games[group_id].roots:
+                for game_root in game.roots:
                     if root.find(game_root) == 0 or game_root.find(root) == 0:
                         banned = True
                         break
-                        # TODO may be not the best way to compare roots
+                        # TODO may be not the best way to compare roots (maybe smth like lcp + 1 >= min(len1, len2)
+                        # TODO maybe allow to use word after it has been guessed
             if banned:
                 context.bot.send_message(chat_id=group_id, text='Ведущий использовал однокоренное слово :(\n' +
                                                                 'Было загадано: ' + ' '.join(games[group_id].words)
                                                                 + '\nНачинаем новый раунд')
                 end_round(group_id)
                 start_round(update, context, secondary=True)
-    elif update.effective_user in games[group_id].participants:
-        if normalize(update.message.text) == ' '.join(games[group_id].words):
+    elif update.effective_user in game.participants:
+        if normalize(update.message.text) == ' '.join(game.words):
             end_round(group_id)
             context.bot.send_message(chat_id=group_id, text=user_name(update.effective_user) + ' угадал!')
-            games[group_id].participants[update.effective_user] += 1
+            game.participants[update.effective_user] += 1
             found = False
-            for i in range(len(games[group_id].top)):
-                if games[group_id].top[i][0].id == user_id:
-                    games[group_id].top[i][1] += 1
+            for i in range(len(game.top)):
+                if game.top[i][0].id == user_id:
+                    game.top[i][1] += 1
                     found = True
                     break
             if not found:
-                games[group_id].top.append([update.effective_user, games[group_id].participants[update.effective_user]])
-            games[group_id].top.sort(key=itemgetter(1), reverse=True)
-            games[group_id].top = games[group_id].top[:10]
-            print_top(update, context, games[group_id].top)
-            if games[group_id].top[0][1] == games[group_id].rounds:
-                context.bot.send_message(chat_id=group_id, text=user_name(games[group_id].top[0][0]) + ' победил!')
+                game.top.append([update.effective_user, game.participants[update.effective_user]])
+            game.top.sort(key=itemgetter(1), reverse=True)
+            game.top = game.top[:10]
+            print_top(update, context, game.top)
+            if game.top[0][1] == game.rounds:
+                context.bot.send_message(chat_id=group_id, text=user_name(game.top[0][0]) + ' победил!')
                 stop_game(update, context)
             else:
                 start_round(update, context)
             return
         guessed = 0
         for word in text:
-            if word in games[group_id].words:
+            if word in game.words:
                 guessed += 1
         if guessed > 0:
             msg = user_name(update.effective_user) + ' угадал ' + str(guessed)
@@ -307,6 +331,7 @@ def check_message(update, context):
                 msg += ' слов!'
             context.bot.send_message(chat_id=group_id, text=msg)
 
+
 def check_callback(update, context):
     group_id = update.effective_chat.id
     user_id = update.effective_user.id
@@ -314,32 +339,36 @@ def check_callback(update, context):
     if group_id not in games:
         context.bot.answer_callback_query(callback_query_id=callback.id, text='Игра кончилась!', show_alert=True)
         return
-    if user_id != games[group_id].leader_id:
+    game = games[group_id]
+    if user_id != game.leader_id:
         context.bot.answer_callback_query(callback_query_id=callback.id, text='Ты не ведущий!', show_alert=True)
         return
     if callback.data is None:
         return
     if callback.data == "words":
-        if len(games[group_id].words) == 0:
+        if len(game.words) == 0:
             context.bot.answer_callback_query(callback_query_id=callback.id,
-                                              text='\n'.join(games[group_id].words_options), show_alert=True)
+                                              text='\n'.join(game.words_options), show_alert=True)
         else:
             context.bot.answer_callback_query(callback_query_id=callback.id,
-                                              text='Ты должен объяснить \"' + ' '.join(games[group_id].words) + '\"',
+                                              text='Ты должен объяснить \"' + ' '.join(game.words) + '\"',
                                               show_alert=True)
-    elif len(games[group_id].words) > 0:
-        context.bot.answer_callback_query(callback_query_id=callback.id, text='Ты уже выбрал слово!', show_alert=True)
+    elif len(game.words) > 0:
+        context.bot.answer_callback_query(callback_query_id=callback.id,
+                                          text='Ты должен объяснить \"' + ' '.join(game.words) + '\"',
+                                          show_alert=True)
     else:
         choice = int(callback.data) - 1
-        games[group_id].words = games[group_id].words_options[choice].split()[1:]
+        game.words = game.words_options[choice].split()[1:]
         context.bot.answer_callback_query(callback_query_id=callback.id,
-                                 text='Теперь ты должен объяснить \"' + ' '.join(games[group_id].words) + '\"',
+                                          text='Теперь ты должен объяснить \"' + ' '.join(game.words) + '\"',
                                           show_alert=True)
-        games[group_id].timer.cancel()
-        games[group_id].round_going = True
-        for word in games[group_id].words:
+        game.timer.cancel()
+        game.round_going = True
+        for word in game.words:
             for root in get_roots(word):
-                games[group_id].roots.append(root)
+                game.roots.append(root)
+
 
 start_game_handler = CommandHandler('start_game', start_game)
 dispatcher.add_handler(start_game_handler)
