@@ -354,6 +354,16 @@ def check_message(update, context):
                 msg += ' очков'
             add_points(group_id, update.effective_user, score)
             context.bot.send_message(chat_id=group_id, text=msg)
+            msg = ''
+            if score > 0:
+                msg += 'На данный момент отгадано '
+                for i in range(len(game.words)):
+                    if game.guessed[i]:
+                        msg += game.words[i]
+                    else:
+                        msg += '????'
+                    msg += ' '
+                context.bot.send_message(chat_id=group_id, text=msg)
         if normalize(update.message.text) == ' '.join(game.words):
             end_round(group_id)
             context.bot.send_message(chat_id=group_id, text=user_name(update.effective_user) + ' угадал!')
