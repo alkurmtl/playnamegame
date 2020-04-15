@@ -335,8 +335,13 @@ def check_message(update, context):
     if user_id == game.leader.id:
         for word in text:
             banned = False
+            TOO_SHORT_ROOT = 3
             for root in get_roots(morph.parse(word)[0].normal_form):
+                if len(root) <= TOO_SHORT_ROOT:
+                    continue
                 for game_root in game.roots:
+                    if len(game_root) <= TOO_SHORT_ROOT:
+                        continue
                     lcp = 0
                     while lcp < min(len(root), len(game_root)):
                        if root[lcp] == game_root[lcp]:
@@ -426,6 +431,8 @@ def check_callback(update, context):
     else:
         choice = int(callback.data) - 1
         game.words = game.words_options[choice].split()[1:]
+        game.words = ['огромное', 'скопление']
+        # что их типа очень много
         context.bot.answer_callback_query(callback_query_id=callback.id,
                                           text='Теперь ты должен объяснить \"' + ' '.join(game.words) + '\"',
                                           show_alert=True)
