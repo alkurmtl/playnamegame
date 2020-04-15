@@ -18,7 +18,7 @@ from telegram.ext import Filters
 from telegram.ext import CallbackQueryHandler
 
 BOT_ID = 1105629394
-START_STRING = ', введи язык и количество раундов в формате "<ru или en\> <число от 1 до 100000\>". Прочитать' \
+START_STRING = ', введи язык и количество раундов в формате "<ru или en\> <число от 1 до 100000\>"\. Прочитать' \
                ' правила игры: /rules'
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -317,8 +317,7 @@ def check_message(update, context):
                     if wins < 1 or wins > 100000:
                         send_start_game_message(update, context)
                         return
-                    context.bot.send_message(chat_id=group_id, text='Игра на языке ' + lang +
-                                                                    ' до ' + str(wins) + ' побед началась!')
+                    context.bot.send_message(chat_id=group_id, text='Игра на языке ' + lang + ' началась!')
                     games[group_id] = Game(lang, wins)
                     game = games[group_id]
                     game.starter_id = update.effective_user.id
@@ -338,10 +337,15 @@ def check_message(update, context):
             banned = False
             for root in get_roots(morph.parse(word)[0].normal_form):
                 for game_root in game.roots:
-                    if root.find(game_root) == 0 or game_root.find(root) == 0:
+                    lcp = 0
+                    while lcp < min(len(root), len(game_root)):
+                        if root[lcp] == game_root[lcp]:
+                            lcp += 1
+                    if lcp + 1 >= min(len(root), len(game_root)):
                         banned = True
                         break
-                        # TODO may be not the best way to compare roots (maybe smth like lcp + 1 >= min(len1, len2)
+                        # may be not the best way to compare roots (maybe smth like lcp + 1 >= min(len1, len2)
+                        # TODO implemented it, now let's see and switch back to one being prefix of another if needed
                         # TODO maybe allow to use word after it has been guessed
             if banned:
                 context.bot.send_message(chat_id=group_id, text='Ведущий использовал однокоренное слово :(\n' +
@@ -350,7 +354,6 @@ def check_message(update, context):
                 end_round(group_id)
                 start_round(update, context, secondary=True)
     elif update.effective_user in game.participants:
-        guessed = 0
         score = 0
         for word in text:
             norm_word = morph.parse(word)[0].normal_form
@@ -360,42 +363,33 @@ def check_message(update, context):
                     if not game.guessed[i]:
                         score += 1
                         game.guessed[i] = True
-                    guessed += 1
-        if guessed > 0:
-            msg = user_name(update.effective_user) + ' угадал ' + str(guessed)
-            if guessed == 1:
+        if score > 0:
+            msg = user_name(update.effective_user) + ' угадал ' + str(score)
+            if score == 1:
                 msg += ' слово'
-            elif 2 <= guessed <= 4:
+            elif 2 <= score <= 4:
                 msg += ' слова'
             else:
                 msg += ' слов'
-            msg += ' и получает ' + str(score)
-            if score == 1:
-                msg += ' очко'
-            elif 2 <= score <= 4:
-                msg += ' очка'
-            else:
-                msg += ' очков'
             add_points(group_id, update.effective_user, score)
             context.bot.send_message(chat_id=group_id, text=msg)
-            msg = ''
-            if score > 0:
-                msg += 'На данный момент отгадано '
-                for i in range(len(game.words)):
-                    if game.guessed[i]:
-                        msg += game.words[i]
-                    else:
-                        msg += '????'
-                    msg += ' '
-                context.bot.send_message(chat_id=group_id, text=msg)
-        if normalize(update.message.text) == ' '.join(game.words):
+            msg = 'На данный момент отгадано '
+            for i in range(len(game.words)):
+                if game.guessed[i]:
+                    msg += game.words[i]
+                else:
+                    msg += '????'
+                msg += ' '
+            context.bot.send_message(chat_id=group_id, text=msg)
+        if sum(game.guessed) == len(game.words):
+            game.rounds -= 1
             end_round(group_id)
-            context.bot.send_message(chat_id=group_id, text=user_name(update.effective_user) + ' угадал!')
+            context.bot.send_message(chat_id=group_id, text='Все слова отгаданы! Осталось раундов: ' + str(game.rounds))
             add_points(group_id, game.leader, 1)
             print_top(update, context, game.top)
-            game.rounds -= 1
             if game.rounds == 0:
-                context.bot.send_message(chat_id=group_id, text=user_name(game.top[0][0]) + ' победил!')
+                context.bot.send_message(chat_id=group_id, text='Игра окончена, ' +
+                                                                user_name(game.top[0][0]) + ' победил!')
                 stop_game(update, context)
             else:
                 start_round(update, context)
