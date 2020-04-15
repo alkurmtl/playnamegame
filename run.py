@@ -10,6 +10,7 @@ from operator import itemgetter
 from telegram import InlineKeyboardMarkup
 from telegram import InlineKeyboardButton
 from telegram import ParseMode
+from telegram import ForceReply
 from telegram.ext import Updater
 from telegram.ext import CommandHandler
 from telegram.ext import MessageHandler
@@ -17,6 +18,7 @@ from telegram.ext import Filters
 from telegram.ext import CallbackQueryHandler
 
 BOT_ID = 1105629394
+START_STRING = ', введи язык и количество раундов в формате "<ru или en\> <число от 1 до 100000\>"'
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -71,7 +73,7 @@ def normalize(s):
     return s.translate(str.maketrans(dict.fromkeys(string.punctuation))).lower()
 
 
-def get_roots(s):  # TODO several roots
+def get_roots(s):
     norm = morph.parse(normalize(s))[0].normal_form
     if len(norm) == 0:
         return []
@@ -104,6 +106,11 @@ def print_top(update, context, top):
         message_text += user_name(place[0]) + ' — ' + str(place[1]) + '\n'
     context.bot.send_message(chat_id=group_id, text=message_text)
 
+def send_start_game_message(update, context):
+    context.bot.send_message(chat_id=update.effective_chat.id,
+                             text=user_name(update.effective_user, mention=True) + START_STRING,
+                             reply_markup=ForceReply(selective=True),
+                             parse_mode=ParseMode.MARKDOWN_V2)
 
 def end_round(group_id):
     game = games[group_id]
@@ -111,7 +118,8 @@ def end_round(group_id):
     game.words_options = []
     game.words = []
     game.roots = []
-    game.timer.cancel()
+    if game.timer is not None:
+        game.timer.cancel()
 
 
 def restart_round(update, context):
@@ -143,28 +151,7 @@ def start_game(update, context):
     if group_id in games:
         context.bot.send_message(chat_id=group_id, text='Игра уже идет в этом чате!')
     else:
-        if len(context.args) < 2:
-            context.bot.send_message(chat_id=group_id, text='Введите язык и кол-во раундов')
-            return
-        lang = context.args[0]
-        if lang != "ru":
-            context.bot.send_message(chat_id=group_id, text='Введите другой язык (пока поддерживаем только ru)')
-            return
-        try:
-            wins = int(context.args[1])
-        except ValueError:
-            context.bot.send_message(chat_id=group_id, text='Число раундов не является числом')
-            return
-        if wins < 1 or wins > 100000:
-            context.bot.send_message(chat_id=group_id, text='Число раундов должно быть от 1 до 100000')
-            return
-        context.bot.send_message(chat_id=group_id, text='Игра на языке ' + lang +
-                                                        ' до ' + str(wins) + ' побед началась!')
-        games[group_id] = Game(lang, wins)
-        game = games[group_id]
-        game.starter_id = update.effective_user.id
-        game.participants[update.effective_user] = 0
-        game.leader_candidates.add(update.effective_user)
+        send_start_game_message(update, context)
 
 
 def join_game(update, context):
@@ -270,6 +257,32 @@ def stop_game(update, context):
 def check_message(update, context):
     group_id = update.effective_chat.id
     if group_id not in games:
+        replied = update.effective_message.reply_to_message
+        if replied is not None:
+            if replied.from_user.id == BOT_ID and replied.text.find(START_STRING) != 0:
+                text = update.effective_message.text.split()
+                if len(text) != 2:
+                    send_start_game_message(update, context)
+                else:
+                    lang = text[0].lower()
+                    if lang != "ru":
+                        send_start_game_message(update, context)
+                        return
+                    try:
+                        wins = int(text[1])
+                    except ValueError:
+                        send_start_game_message(update, context)
+                        return
+                    if wins < 1 or wins > 100000:
+                        send_start_game_message(update, context)
+                        return
+                    context.bot.send_message(chat_id=group_id, text='Игра на языке ' + lang +
+                                                                    ' до ' + str(wins) + ' побед началась!')
+                    games[group_id] = Game(lang, wins)
+                    game = games[group_id]
+                    game.starter_id = update.effective_user.id
+                    game.participants[update.effective_user] = 0
+                    game.leader_candidates.add(update.effective_user)
         return
     game = games[group_id]
     if not game.round_going:
