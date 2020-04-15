@@ -1,5 +1,6 @@
 import logging
 import random
+import json
 import string
 import threading
 import urllib.request
@@ -46,8 +47,16 @@ def get_phrase():
 
 def get_phrases(amount):
     res = []
-    for i in range(amount):
-        res.append(get_phrase())
+    try:
+        req = urllib.request.urlopen('https://play-name.com/PlayEngine/api/')
+        words = json.loads(req.read().decode('utf-8'))
+        for word in words['ru'].keys():
+            res.append(word)
+            if len(res) == amount:
+                break
+    except (HTTPError, json.JSONDecodeError) as e:
+        for i in range(amount):
+            res.append(get_phrase())
     return res
 
 
@@ -246,11 +255,13 @@ def leave_game(update, context):
             start_round(update, context, secondary=True)
 
 
-def stop_game(update, context):
+def stop_game(update, context, secondary):
     group_id = update.effective_chat.id
     user_id = update.effective_user.id
     if group_id in games:
         game = games[group_id]
+        if secondary:
+            user_id = game.starter_id
         allowed = False
         if user_id == game.starter_id:
             allowed = True
@@ -397,7 +408,7 @@ def check_message(update, context):
             if game.rounds == 0:
                 context.bot.send_message(chat_id=group_id, text='Игра окончена, ' +
                                                                 user_name(game.top[0][0]) + ' победил!')
-                stop_game(update, context)
+                stop_game(update, context, secondary=True)
             else:
                 start_round(update, context)
             return
@@ -431,7 +442,6 @@ def check_callback(update, context):
     else:
         choice = int(callback.data) - 1
         game.words = game.words_options[choice].split()[1:]
-        game.words = ['огромное', 'скопление']
         # что их типа очень много
         context.bot.answer_callback_query(callback_query_id=callback.id,
                                           text='Теперь ты должен объяснить \"' + ' '.join(game.words) + '\"',
