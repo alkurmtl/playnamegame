@@ -4,6 +4,7 @@ import json
 import string
 import threading
 import urllib.request
+import spacy
 from urllib.parse import quote
 from urllib.error import HTTPError
 import pymorphy2
@@ -32,31 +33,42 @@ token_file.close()
 dispatcher = updater.dispatcher
 
 morph = pymorphy2.MorphAnalyzer()
+nlp = spacy.load('en_core_web_sm')
 
-phrases = []
-phrases_file = open('phrases.txt', 'r', encoding='utf-8')
+phrases_ru = []
+phrases_file = open('phrases_ru.txt', 'r', encoding='utf-8')
 for line in phrases_file:
-    phrases.append(line.rstrip('\n'))
+    phrases_ru.append(line.rstrip('\n'))
+phrases_file.close()
+print('Done reading phrases from file')
+
+phrases_en = []
+phrases_file = open('phrases_en.txt', 'r', encoding='utf-8')
+for line in phrases_file:
+    phrases_en.append(line.rstrip('\n'))
 phrases_file.close()
 print('Done reading phrases from file')
 
 
-def get_phrase():
-    return phrases[random.randint(0, len(phrases) - 1)]
+def get_phrase(lang):
+    if lang == 'ru':
+        return phrases_ru[random.randint(0, len(phrases_ru) - 1)]
+    else:
+        return phrases_en[random.randint(0, len(phrases_en) - 1)]
 
 
-def get_phrases(amount):
+def get_phrases(amount, lang):
     res = []
     try:
-        req = urllib.request.urlopen('https://play-name.com/PlayEngine/api/')
+        req = urllib.request.urlopen('https://play-name.com/PlayEngine/api/', data=str.encode('lang=' + lang))
         words = json.loads(req.read().decode('utf-8'))
-        for word in words['ru'].keys():
+        for word in words[lang].keys():
             res.append(word)
             if len(res) == amount:
                 break
     except (HTTPError, json.JSONDecodeError) as e:
         for i in range(amount):
-            res.append(get_phrase())
+            res.append(get_phrase(lang))
     return res
 
 
@@ -81,6 +93,13 @@ def user_name(user, mention=False):
 
 def normalize(s):
     return s.translate(str.maketrans(dict.fromkeys(string.punctuation))).lower()
+
+
+def get_normal_form(s, lang):
+    if lang == 'ru':
+        return morph.parse(s)[0].normal_form
+    elif lang == 'en':
+        return nlp(s)[0].lemma_
 
 
 def get_roots(s):
@@ -141,6 +160,7 @@ def restart_round(update, context):
     end_round(group_id)
     start_round(update, context, True)
 
+
 def add_points(group_id, user, score):
     game = games[group_id]
     game.participants[user] += score
@@ -154,6 +174,7 @@ def add_points(group_id, user, score):
         game.top.append([user, game.participants[user]])
     game.top.sort(key=itemgetter(1), reverse=True)
     game.top = game.top[:10]
+
 
 class Game:
 
@@ -215,7 +236,7 @@ def start_round(update, context, secondary=False):
     game.leader_candidates.remove(leader)
     game.leader = leader
     phrases_amount = 6
-    options = get_phrases(phrases_amount)
+    options = get_phrases(phrases_amount, game.lang)
     keyboard_markup = InlineKeyboardMarkup([[], []])
     for i in range(phrases_amount):
         game.words_options.append(str(i + 1) + '. ' + options[i])
@@ -241,7 +262,7 @@ def leave_game(update, context):
         context.bot.send_message(chat_id=group_id, text=user_name(user) + ' покинул игру')
         if len(game.participants) == 0:
             context.bot.send_message(chat_id=group_id, text='Последний игрок покинул игру, завершаемся :(')
-            stop_game(update, context)
+            stop_game(update, context, secondary=True)
             return
         if user.id == game.starter_id:
             new_starter = random.choice(tuple(game.participants.keys()))
@@ -255,7 +276,7 @@ def leave_game(update, context):
             start_round(update, context, secondary=True)
 
 
-def stop_game(update, context, secondary):
+def stop_game(update, context, secondary=False):
     group_id = update.effective_chat.id
     user_id = update.effective_user.id
     if group_id in games:
@@ -294,7 +315,8 @@ def rules(update, context):
                 'случайным образом выберется другой ведущий.\n' \
                 'Сама игра происходит таким образом: игроки могут спрашивать у ведущего про выбранное им ' \
                 'словосочетание, а ведущий может отвечать на них, не используя однокоренные с загаданными слова. ' \
-                'Если он использует однокоренное, то раунд закончится, а ведущим станет другой игрок. ' \
+                'Если он использует однокоренное, то раунд закончится, а ведущим станет другой игрок. Альтернативный ' \
+                'вариант: ведущий может просто объяснять загаданные слова, а игроки пытаться угадать. ' \
                 'Как только кто-то из игроков произнес несколько из загаданных слов, ему начислится столько же очков, ' \
                 'а отгаданные слова откроются. ' \
                 'Если кто-то из игроков произнесет уже угаданные слова, то ему ничего за них не начислится. ' \
@@ -305,6 +327,7 @@ def rules(update, context):
                 'Если вдруг понадобилось досрочно закончить игру, администраторы чата и игрок, стартовавший игру, ' \
                 '(я называю его "администратор игры") могут сделать это с помощью /stop_game'
     context.bot.send_message(chat_id=update.effective_chat.id, text=rules_msg)
+
 
 def check_message(update, context):
     group_id = update.effective_chat.id
@@ -317,7 +340,7 @@ def check_message(update, context):
                     send_start_game_message(update, context)
                 else:
                     lang = text[0].lower()
-                    if lang != "ru":
+                    if lang != "ru" and lang != "en":
                         send_start_game_message(update, context)
                         return
                     try:
@@ -344,6 +367,9 @@ def check_message(update, context):
         text[i] = normalize(text[i])
         text[i] = text[i].lower()
     if user_id == game.leader.id:
+        if game.lang == 'en':
+            # TODO some root checking for english words
+            pass
         for word in text:
             banned = False
             TOO_SHORT_ROOT = 3
@@ -355,10 +381,10 @@ def check_message(update, context):
                         continue
                     lcp = 0
                     while lcp < min(len(root), len(game_root)):
-                       if root[lcp] == game_root[lcp]:
-                           lcp += 1
-                       else:
-                           break
+                        if root[lcp] == game_root[lcp]:
+                            lcp += 1
+                        else:
+                            break
                     if lcp + 1 >= min(len(root), len(game_root)):
                         banned = True
                         break
@@ -374,9 +400,9 @@ def check_message(update, context):
     elif update.effective_user in game.participants:
         score = 0
         for word in text:
-            norm_word = morph.parse(word)[0].normal_form
+            norm_word = get_normal_form(word, game.lang)
             for i in range(len(game.words)):
-                norm_game_word = morph.parse(game.words[i])[0].normal_form
+                norm_game_word = get_normal_form(game.words[i], game.lang)
                 if norm_word == norm_game_word:
                     if not game.guessed[i]:
                         score += 1
@@ -442,7 +468,6 @@ def check_callback(update, context):
     else:
         choice = int(callback.data) - 1
         game.words = game.words_options[choice].split()[1:]
-        # что их типа очень много
         context.bot.answer_callback_query(callback_query_id=callback.id,
                                           text='Теперь ты должен объяснить \"' + ' '.join(game.words) + '\"',
                                           show_alert=True)
