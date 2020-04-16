@@ -407,6 +407,11 @@ def check_message(update, context):
                     if not game.guessed[i]:
                         score += 1
                         game.guessed[i] = True
+                        for root in get_roots(game.words[i]):
+                            try:
+                                game.roots.remove(root)
+                            except ValueError:
+                                pass
         if score > 0:
             msg = user_name(update.effective_user) + ' угадал ' + str(score)
             if score == 1:
