@@ -97,9 +97,9 @@ def normalize(s):
 
 def get_normal_form(s, lang):
     if lang == 'ru':
-        return morph.parse(s)[0].normal_form
+        return morph.parse(s.lower())[0].normal_form
     elif lang == 'en':
-        return nlp(s)[0].lemma_
+        return nlp(s.lower())[0].lemma_
 
 
 def get_roots(s):
