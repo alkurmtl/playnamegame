@@ -109,8 +109,10 @@ def get_normal_form(s, lang):
         return nlp(s.lower())[0].lemma_
 
 
-def get_roots(s):
-    norm = morph.parse(normalize(s))[0].normal_form
+def get_roots(s, lang):
+    norm = get_normal_form(s, lang)
+    if lang == 'en':
+        return norm
     if len(norm) == 0:
         return []
     try:
@@ -133,6 +135,25 @@ def get_roots(s):
         index = pos
         roots.append(root)
     return roots
+
+
+def check_roots(root1, root2, lang):
+    if lang == 'ru':
+        TOO_SHORT = 3
+        min_len = min(len(root1), len(root2))
+        if min_len <= TOO_SHORT:
+            return root1 == root2
+        else:
+            lcp = 0
+            while lcp < min_len:
+                if root1[lcp] == root2[lcp]:
+                    lcp += 1
+                else:
+                    break
+            return lcp + 1 >= min_len
+    elif lang == 'en':
+        return root1 == root2
+# TODO improve
 
 
 def print_top(update, context, top):
@@ -377,30 +398,13 @@ def check_message(update, context):
         text[i] = normalize(text[i])
         text[i] = text[i].lower()
     if user_id == game.leader.id:
-        if game.lang == 'en':
-            # TODO some root checking for english words
-            pass
         for word in text:
             banned = False
-            TOO_SHORT_ROOT = 3
-            for root in get_roots(morph.parse(word)[0].normal_form):
-                if len(root) <= TOO_SHORT_ROOT:
-                    continue
+            for root in get_roots(word, game.lang):
                 for game_root in game.roots:
-                    if len(game_root) <= TOO_SHORT_ROOT:
-                        continue
-                    lcp = 0
-                    while lcp < min(len(root), len(game_root)):
-                        if root[lcp] == game_root[lcp]:
-                            lcp += 1
-                        else:
-                            break
-                    if lcp + 1 >= min(len(root), len(game_root)):
+                    if check_roots(root, game_root, game.lang):
                         banned = True
                         break
-                        # may be not the best way to compare roots (maybe smth like lcp + 1 >= min(len1, len2)
-                        # TODO implemented it, now let's see and switch back to one being prefix of another if needed
-                        # TODO maybe allow to use word after it has been guessed
             if banned:
                 context.bot.send_message(chat_id=group_id, text='Ведущий использовал однокоренное слово :(\n' +
                                                                 'Было загадано: ' + ' '.join(games[group_id].words)
@@ -417,7 +421,7 @@ def check_message(update, context):
                     if not game.guessed[i]:
                         score += 1
                         game.guessed[i] = True
-                        for root in get_roots(game.words[i]):
+                        for root in get_roots(game.words[i], game.lang):
                             try:
                                 game.roots.remove(root)
                             except ValueError:
@@ -489,12 +493,19 @@ def check_callback(update, context):
         game.timer.cancel()
         game.round_going = True
         for word in game.words:
-            for root in get_roots(word):
+            for root in get_roots(word, game.lang):
                 game.roots.append(root)
         for word in game.words:
             game.guessed.append(False)
 
 
+def start(update, context):
+    context.bot.send_message(chat_id=update.effective_chat.id,
+                             text='Добавить бота в чат: https://t.me/playnamegame_bot?startgroup=fromprivate')
+
+
+start_handler = CommandHandler('start', start)
+dispatcher.add_handler(start_handler)
 start_game_handler = CommandHandler('start_game', start_game)
 dispatcher.add_handler(start_game_handler)
 join_game_handler = CommandHandler('join_game', join_game)
