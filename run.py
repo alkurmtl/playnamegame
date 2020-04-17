@@ -184,7 +184,7 @@ def end_round(group_id):
 
 def restart_round(update, context):
     group_id = update.effective_chat.id
-    context.bot.send_message(chat_id=group_id, text='Ведущий слишком долго выбирал слово, начинаем новый раунд')
+    context.bot.send_message(chat_id=group_id, text='Ведущий слишком долго был неактивным, начинаем новый раунд')
     end_round(group_id)
     start_round(update, context, True)
 
@@ -356,9 +356,11 @@ def rules(update, context):
                 'то ему ничего за них не начислится. Как только будут отгаданы все слова, ведущему за старания ' \
                 'начислится одно очко, и автоматически начнется следующий раунд, где будет выбран уже другой ведущий. \n' \
                 '*11.* Если ведущий больше не может объяснять, и хочет сдаться, он может написать /give_up' \
-                '*12.* Для того, чтобы покинуть игру, наберите /leave_game  ' \
+                '*12.* Если ведущий ничего не будет писать в течение 5 минут, он посчитается покинувшим игру и ' \
+                'будет выбран другой ведущий.' \
+                '*13.* Для того, чтобы покинуть игру, наберите /leave_game  ' \
                 '(если кому-то надоело играть и чтобы его не выбирало ведущим)\n' \
-                '*13.* Если вдруг понадобилось досрочно закончить игру, администраторы чата и игрок, стартовавший игру, ' \
+                '*14.* Если вдруг понадобилось досрочно закончить игру, администраторы чата и игрок, стартовавший игру, ' \
                 '("администратор игры") могут сделать это с помощью /stop_game'
     context.bot.send_message(chat_id=update.effective_chat.id, text=escape_markdown(rules_msg, escape_star=False),
                              parse_mode=ParseMode.MARKDOWN_V2)
@@ -404,6 +406,9 @@ def check_message(update, context):
         text[i] = normalize(text[i])
         text[i] = text[i].lower()
     if user_id == game.leader.id:
+        game.timer.cancel()
+        game.timer = threading.Timer(300, restart_round, args=[update, context])
+        game.timer.start()
         for word in text:
             banned = False
             for root in get_roots(word, game.lang):
@@ -500,6 +505,8 @@ def check_callback(update, context):
                                           text='Теперь ты должен объяснить \"' + ' '.join(game.words) + '\"',
                                           show_alert=True)
         game.timer.cancel()
+        game.timer = threading.Timer(300, restart_round, args=[update, context])
+        game.timer.start()
         game.round_going = True
         for word in game.words:
             for root in get_roots(word, game.lang):
