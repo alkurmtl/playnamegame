@@ -230,9 +230,12 @@ def start_game(update, context):
         send_start_game_message(update, context)
 
 
-def join_game(update, context):
+def join_game(update, context, secondary=False, callback_user=None):
     group_id = update.effective_chat.id
-    user = update.effective_user
+    if secondary:
+        user = callback_user
+    else:
+        user = update.effective_user
     if group_id not in games:
         context.bot.send_message(chat_id=group_id, text='В этом чате не идет игры')
         return
@@ -382,7 +385,9 @@ def check_message(update, context):
                     if wins < 1 or wins > 100000:
                         send_start_game_message(update, context)
                         return
-                    context.bot.send_message(chat_id=group_id, text='Игра на языке ' + lang + ' началась!')
+                    context.bot.send_message(chat_id=group_id, text='Игра на языке ' + lang + ' началась!',
+                                             reply_markup=InlineKeyboardMarkup
+                                             ([[InlineKeyboardButton('Присоединиться', callback_data='join')]]))
                     games[group_id] = Game(lang, wins)
                     game = games[group_id]
                     game.starter_id = update.effective_user.id
@@ -467,10 +472,13 @@ def check_callback(update, context):
         context.bot.answer_callback_query(callback_query_id=callback.id, text='Игра кончилась!', show_alert=True)
         return
     game = games[group_id]
+    if callback.data is None:
+        return
+    if callback.data == 'join':
+        join_game(update, context, secondary=True, callback_user=update.effective_user)
+        return
     if user_id != game.leader.id:
         context.bot.answer_callback_query(callback_query_id=callback.id, text='Ты не ведущий!', show_alert=True)
-        return
-    if callback.data is None:
         return
     if callback.data == "words":
         if len(game.words) == 0:
@@ -499,6 +507,18 @@ def check_callback(update, context):
             game.guessed.append(False)
 
 
+def give_up(update, context):
+    group_id = update.effective_chat.id
+    if group_id not in games:
+        return
+    game = games[group_id]
+    user_id = update.effective_user.id
+    if user_id != game.leader.id:
+        context.bot.send_message(chat_id=group_id, text=user_name(user_id) + ', ты не ведущий...')
+    end_round(group_id)
+    start_round(update, context, secondary=True)
+
+
 def start(update, context):
     context.bot.send_message(chat_id=update.effective_chat.id,
                              text='Добавить бота в чат: https://t.me/playnamegame_bot?startgroup=fromprivate')
@@ -516,6 +536,8 @@ leave_game_handler = CommandHandler('leave_game', leave_game)
 dispatcher.add_handler(leave_game_handler)
 stop_game_handler = CommandHandler('stop_game', stop_game)
 dispatcher.add_handler(stop_game_handler)
+give_up_handler = CommandHandler('give_up', give_up)
+dispatcher.add_handler(give_up_handler)
 rules_handler = CommandHandler('rules', rules)
 dispatcher.add_handler(rules_handler)
 msg_handler = MessageHandler(Filters.text, check_message)
