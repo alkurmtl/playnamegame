@@ -355,9 +355,10 @@ def rules(update, context):
                 'а отгаданные слова откроются. Если кто-то из игроков произнесет уже угаданные слова, ' \
                 'то ему ничего за них не начислится. Как только будут отгаданы все слова, ведущему за старания ' \
                 'начислится одно очко, и автоматически начнется следующий раунд, где будет выбран уже другой ведущий. \n' \
-                '*11.* Для того, чтобы покинуть игру, наберите /leave_game  ' \
+                '*11.* Если ведущий больше не может объяснять, и хочет сдаться, он может написать /give_up' \
+                '*12.* Для того, чтобы покинуть игру, наберите /leave_game  ' \
                 '(если кому-то надоело играть и чтобы его не выбирало ведущим)\n' \
-                '*12.* Если вдруг понадобилось досрочно закончить игру, администраторы чата и игрок, стартовавший игру, ' \
+                '*13.* Если вдруг понадобилось досрочно закончить игру, администраторы чата и игрок, стартовавший игру, ' \
                 '("администратор игры") могут сделать это с помощью /stop_game'
     context.bot.send_message(chat_id=update.effective_chat.id, text=escape_markdown(rules_msg, escape_star=False),
                              parse_mode=ParseMode.MARKDOWN_V2)
@@ -520,8 +521,12 @@ def give_up(update, context):
 
 
 def start(update, context):
-    context.bot.send_message(chat_id=update.effective_chat.id,
-                             text='Добавить бота в чат: https://t.me/playnamegame_bot?startgroup=fromprivate')
+    if update.effective_chat.id < 0:
+        context.bot.send_message(chat_id=update.effective_chat.id,
+                                 text='Привет! Чтобы узнать, как играть со мной, напиши /rules')
+    else:
+        context.bot.send_message(chat_id=update.effective_chat.id,
+                             text='Добавить бота в чат: https://t.me/playnamegame_bot?startgroup=true')
 
 
 start_handler = CommandHandler('start', start)
