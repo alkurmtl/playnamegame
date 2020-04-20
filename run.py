@@ -404,7 +404,8 @@ def check_message(update, context):
                         return
                     context.bot.send_message(chat_id=group_id, text='Игра на языке ' + lang + ' началась!',
                                              reply_markup=InlineKeyboardMarkup
-                                             ([[InlineKeyboardButton('Присоединиться', callback_data='join')]]))
+                                             ([[InlineKeyboardButton('Присоединиться', callback_data='join')],
+                                               [InlineKeyboardButton('Начать раунд', callback_data='start_round')]]))
                     games[group_id] = Game(lang, wins)
                     game = games[group_id]
                     game.starter_id = update.effective_user.id
@@ -488,14 +489,20 @@ def check_callback(update, context):
     group_id = update.effective_chat.id
     user_id = update.effective_user.id
     callback = update.callback_query
+    if callback.data == 'start_game':
+        start_game(update, context)
+        return
     if group_id not in games:
-        context.bot.answer_callback_query(callback_query_id=callback.id, text='Игра кончилась!', show_alert=True)
+        context.bot.answer_callback_query(callback_query_id=callback.id, text='Игра не идет!', show_alert=True)
         return
     game = games[group_id]
     if callback.data is None:
         return
     if callback.data == 'join':
         join_game(update, context, secondary=True, callback_user=update.effective_user)
+        return
+    if callback.data == 'start_round':
+        start_round(update, context)
         return
     if user_id != game.leader.id:
         context.bot.answer_callback_query(callback_query_id=callback.id, text='Ты не ведущий!', show_alert=True)
@@ -544,7 +551,9 @@ def give_up(update, context):
 def start(update, context):
     if update.effective_chat.id < 0:
         context.bot.send_message(chat_id=update.effective_chat.id,
-                                 text='Привет! Чтобы узнать, как играть со мной, напиши /rules')
+                                 text='Привет! Чтобы узнать, как играть со мной, напиши /rules',
+                                 reply_markup=InlineKeyboardMarkup(
+                                     [[InlineKeyboardButton('Начать игру', callback_data='start_game')]]))
         db.update(add('groups', 1), Query().groups.exists())
     else:
         context.bot.send_message(chat_id=update.effective_chat.id,
