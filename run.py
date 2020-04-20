@@ -12,6 +12,7 @@ from urllib.error import HTTPError
 import pymorphy2
 from operator import itemgetter
 from telegram import InlineKeyboardMarkup
+from telegram import ReplyKeyboardMarkup
 from telegram import InlineKeyboardButton
 from telegram import ParseMode
 from telegram import ForceReply
@@ -413,6 +414,8 @@ def check_message(update, context):
                     game.participants[update.effective_user] = 0
                     game.leader_candidates.add(update.effective_user)
         return
+    if group_id == COMMON_GROUP_ID and update.effective_message.text == 'Хочу присоединиться!':
+        join_game(update, context, secondary=True, callback_user=update.effective_user)
     game = games[group_id]
     if not game.round_going:
         return
@@ -601,6 +604,8 @@ updater.bot.send_message(chat_id=COMMON_GROUP_ID, text='Игра на языке
                          reply_markup=InlineKeyboardMarkup
                          ([[InlineKeyboardButton('Присоединиться', callback_data='join')],
                            [InlineKeyboardButton('Начать раунд', callback_data='start_round')]]))
+updater.bot.send_message(chat_id=COMMON_GROUP_ID, text='Чтобы прочитать правила, напиши /rules',
+                         reply_markup=ReplyKeyboardMarkup([['Хочу присоединиться']]))
 games[COMMON_GROUP_ID] = Game('ru', 99999)
 game = games[COMMON_GROUP_ID]
 game.starter_id = None
