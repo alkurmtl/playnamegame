@@ -5,6 +5,8 @@ import string
 import threading
 import urllib.request
 import spacy
+from tinydb import TinyDB, Query
+from tinydb.operations import add
 from urllib.parse import quote
 from urllib.error import HTTPError
 import pymorphy2
@@ -73,7 +75,15 @@ def get_phrases(amount, lang):
 
 
 games = dict()
-
+db = TinyDB('db.json')
+if not db.search(Query().groups.exists()):
+    db.insert({'groups': 1})
+if not db.search(Query().games.exists()):
+    db.insert({'games': 0})
+if not db.search(Query().rounds.exists()):
+    db.insert({'rounds': 0})
+if not db.search(Query().joins.exists()):
+    db.insert({'joins': 0})
 
 def escape_markdown(s, escape_star=True):
     markdown = '_*[]()~`>#+-=|{}.!'
@@ -227,6 +237,7 @@ def start_game(update, context):
     if group_id in games:
         context.bot.send_message(chat_id=group_id, text='Игра уже идет в этом чате!')
     else:
+        db.update(add('games', 1), Query().games.exists())
         send_start_game_message(update, context)
 
 
@@ -245,6 +256,7 @@ def join_game(update, context, secondary=False, callback_user=None):
         return
     game.participants[update.effective_user] = 0
     game.leader_candidates.add(user)
+    db.update(add('joins', 1), Query().joins.exists())
     context.bot.send_message(chat_id=group_id, text=user_name(user) + ' присоединился к игре!')
 
 
@@ -261,6 +273,8 @@ def start_round(update, context, secondary=False):
     if not secondary and user not in game.participants:
         context.bot.send_message(chat_id=group_id, text=user_name(user) + ', сначала присоединись к игре!')
         return
+    if not secondary:
+        db.update(add('rounds', 1), Query().rounds.exists())
     if len(game.leader_candidates) == 0:
         game.leader_candidates = set(game.participants.keys())
     leader = random.choice(tuple(game.leader_candidates))
@@ -466,7 +480,7 @@ def check_message(update, context):
                                                                 user_name(game.top[0][0]) + ' победил!')
                 stop_game(update, context, secondary=True)
             else:
-                start_round(update, context)
+                start_round(update, context, secondary=True)
             return
 
 
@@ -531,9 +545,22 @@ def start(update, context):
     if update.effective_chat.id < 0:
         context.bot.send_message(chat_id=update.effective_chat.id,
                                  text='Привет! Чтобы узнать, как играть со мной, напиши /rules')
+        db.update(add('groups', 1), Query().groups.exists())
     else:
         context.bot.send_message(chat_id=update.effective_chat.id,
                              text='Добавить бота в чат: https://t.me/playnamegame_bot?startgroup=true')
+
+
+def get_stats(update, context):
+    msg = 'Добавлений в группы: '
+    msg += str(db.search(Query().groups.exists())[0]['groups']) + '\n'
+    msg += 'Начато игр: '
+    msg += str(db.search(Query().games.exists())[0]['games']) + '\n'
+    msg += 'Начато раундов (вручную): '
+    msg += str(db.search(Query().rounds.exists())[0]['rounds']) + '\n'
+    msg += 'Количество присоединений к игре: '
+    msg += str(db.search(Query().joins.exists())[0]['joins'])
+    context.bot.send_message(chat_id=update.effective_chat.id, text=msg)
 
 
 start_handler = CommandHandler('start', start)
@@ -552,6 +579,8 @@ give_up_handler = CommandHandler('give_up', give_up)
 dispatcher.add_handler(give_up_handler)
 rules_handler = CommandHandler('rules', rules)
 dispatcher.add_handler(rules_handler)
+get_stats_handler = CommandHandler('get___stats', get_stats)
+dispatcher.add_handler(get_stats_handler)
 msg_handler = MessageHandler(Filters.text, check_message)
 dispatcher.add_handler(msg_handler)
 callback_handler = CallbackQueryHandler(check_callback)
