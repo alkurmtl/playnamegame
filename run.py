@@ -22,6 +22,7 @@ from telegram.ext import Filters
 from telegram.ext import CallbackQueryHandler
 
 BOT_ID = 1105629394
+COMMON_GROUP_ID = -1001314817032
 START_STRING = ', введи язык и количество раундов в формате "<ru или en\> <число от 1 до 100000\>"\. Прочитать' \
                ' правила игры: /rules'
 
@@ -174,11 +175,17 @@ def print_top(update, context, top):
     context.bot.send_message(chat_id=group_id, text=message_text)
 
 
-def send_start_game_message(update, context):
-    context.bot.send_message(chat_id=update.effective_chat.id,
-                             text=user_name(update.effective_user, mention=True) + START_STRING,
-                             reply_markup=ForceReply(selective=True),
-                             parse_mode=ParseMode.MARKDOWN_V2)
+def send_start_game_message(update, context, secondary=False, bot=None):
+    if not secondary:
+        context.bot.send_message(chat_id=update.effective_chat.id,
+                                 text=user_name(update.effective_user, mention=True) + START_STRING,
+                                 reply_markup=ForceReply(selective=True),
+                                 parse_mode=ParseMode.MARKDOWN_V2)
+    else:
+        bot.send_message(chat_id=COMMON_GROUP_ID,
+                         text=START_STRING[2:],
+                         reply_markup=ForceReply(),
+                         parse_mode=ParseMode.MARKDOWN_V2)
 
 
 def end_round(group_id):
@@ -232,13 +239,17 @@ class Game:
         self.timer = None
 
 
-def start_game(update, context):
+def start_game(update, context, secondary = False, bot = None):
+    if secondary:
+        db.update(add('games', 1), Query().games.exists())
+        send_start_game_message(update, context, secondary=True, bot=bot)
+        return
     group_id = update.effective_chat.id
     if group_id in games:
         context.bot.send_message(chat_id=group_id, text='Игра уже идет в этом чате!')
     else:
         db.update(add('games', 1), Query().games.exists())
-        send_start_game_message(update, context)
+        send_start_game_message(update, context, secondary=True, bot=bot)
 
 
 def join_game(update, context, secondary=False, callback_user=None):
@@ -596,3 +607,4 @@ callback_handler = CallbackQueryHandler(check_callback)
 dispatcher.add_handler(callback_handler)
 
 updater.start_polling()
+start_game(None, None, secondary=True, bot=updater.bot)
