@@ -175,17 +175,11 @@ def print_top(update, context, top):
     context.bot.send_message(chat_id=group_id, text=message_text)
 
 
-def send_start_game_message(update, context, secondary=False, bot=None):
-    if not secondary:
-        context.bot.send_message(chat_id=update.effective_chat.id,
-                                 text=user_name(update.effective_user, mention=True) + START_STRING,
-                                 reply_markup=ForceReply(selective=True),
-                                 parse_mode=ParseMode.MARKDOWN_V2)
-    else:
-        bot.send_message(chat_id=COMMON_GROUP_ID,
-                         text=START_STRING[2:],
-                         reply_markup=ForceReply(),
-                         parse_mode=ParseMode.MARKDOWN_V2)
+def send_start_game_message(update, context):
+    context.bot.send_message(chat_id=update.effective_chat.id,
+                             text=user_name(update.effective_user, mention=True) + START_STRING,
+                             reply_markup=ForceReply(selective=True),
+                             parse_mode=ParseMode.MARKDOWN_V2)
 
 
 def end_round(group_id):
@@ -239,17 +233,13 @@ class Game:
         self.timer = None
 
 
-def start_game(update, context, secondary = False, bot = None):
-    if secondary:
-        db.update(add('games', 1), Query().games.exists())
-        send_start_game_message(update, context, secondary=True, bot=bot)
-        return
+def start_game(update, context):
     group_id = update.effective_chat.id
     if group_id in games:
         context.bot.send_message(chat_id=group_id, text='Игра уже идет в этом чате!')
     else:
         db.update(add('games', 1), Query().games.exists())
-        send_start_game_message(update, context, secondary=True, bot=bot)
+        send_start_game_message(update, context)
 
 
 def join_game(update, context, secondary=False, callback_user=None):
@@ -607,4 +597,10 @@ callback_handler = CallbackQueryHandler(check_callback)
 dispatcher.add_handler(callback_handler)
 
 updater.start_polling()
-start_game(None, None, secondary=True, bot=updater.bot)
+updater.bot.send_message(chat_id=COMMON_GROUP_ID, text='Игра на языке ' + 'ru' + ' началась!',
+                         reply_markup=InlineKeyboardMarkup
+                         ([[InlineKeyboardButton('Присоединиться', callback_data='join')],
+                           [InlineKeyboardButton('Начать раунд', callback_data='start_round')]]))
+games[COMMON_GROUP_ID] = Game('ru', 99999)
+game = games[COMMON_GROUP_ID]
+game.starter_id = None
