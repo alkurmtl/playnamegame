@@ -606,7 +606,7 @@ updater.bot.send_message(chat_id=COMMON_GROUP_ID, text='Игра на языке
                          ([[InlineKeyboardButton('Присоединиться', callback_data='join')],
                            [InlineKeyboardButton('Начать раунд', callback_data='start_round')]]))
 updater.bot.send_message(chat_id=COMMON_GROUP_ID, text='Чтобы прочитать правила, напиши /rules',
-                         reply_markup=ReplyKeyboardMarkup([[WANNA_JOIN_STRING]]))
+                         reply_markup=ReplyKeyboardMarkup([[WANNA_JOIN_STRING]], resize_keyboard=True))
 games[COMMON_GROUP_ID] = Game('ru', 99999)
 game = games[COMMON_GROUP_ID]
 game.starter_id = None
