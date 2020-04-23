@@ -296,7 +296,10 @@ def start_round(update, context, secondary=False):
         db.update(add('rounds', 1), Query().rounds.exists())
     if len(game.leader_candidates) == 0:
         game.leader_candidates = set(game.participants.keys())
-    leader = random.choice(tuple(game.leader_candidates))
+    elif len(game.leader_candidates) == 1:
+        leader = random.choice(tuple(game.leader_candidates))
+    else:
+        leader = random.choice(tuple(game.leader_candidates.difference(set([game.leader]))))
     game.leader = leader
     phrases_amount = 6
     options = get_phrases(phrases_amount, game.lang)
