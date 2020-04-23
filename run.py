@@ -5,6 +5,7 @@ import string
 import threading
 import urllib.request
 import spacy
+from datetime import datetime
 from tinydb import TinyDB, Query
 from tinydb.operations import add
 from urllib.parse import quote
@@ -217,6 +218,15 @@ def add_points(group_id, user, score):
     game.top = game.top[:10]
 
 
+start_time = datetime.now()
+
+def dont_spam():
+    cur_time = datetime.now()
+    if cur_time.timestamp() - start_time.timestamp() < 2:
+        return True
+    return False
+
+
 class Game:
 
     def __init__(self, lang, rounds):
@@ -236,6 +246,8 @@ class Game:
 
 
 def start_game(update, context):
+    if dont_spam():
+        return
     group_id = update.effective_chat.id
     if group_id in games:
         context.bot.send_message(chat_id=group_id, text='Игра уже идет в этом чате!')
@@ -245,6 +257,8 @@ def start_game(update, context):
 
 
 def join_game(update, context, secondary=False, callback_user=None):
+    if dont_spam():
+        return
     group_id = update.effective_chat.id
     if secondary:
         user = callback_user
@@ -264,6 +278,8 @@ def join_game(update, context, secondary=False, callback_user=None):
 
 
 def start_round(update, context, secondary=False):
+    if dont_spam():
+        return
     group_id = update.effective_chat.id
     user = update.effective_user
     if group_id not in games:
@@ -299,6 +315,8 @@ def start_round(update, context, secondary=False):
 
 
 def leave_game(update, context):
+    if dont_spam():
+        return
     group_id = update.effective_chat.id
     if group_id not in games:
         return
@@ -325,6 +343,8 @@ def leave_game(update, context):
 
 
 def stop_game(update, context, secondary=False):
+    if dont_spam():
+        return
     group_id = update.effective_chat.id
     user_id = update.effective_user.id
     if group_id in games:
@@ -353,6 +373,8 @@ def stop_game(update, context, secondary=False):
 
 
 def rules(update, context):
+    if dont_spam():
+        return
     rules_msg = '*Правила игры:* 🐊 \n\n' \
                 '*1.* Все команды доступны при введении символа / \n' \
                 '*2.* Чтобы начать игру, напишите /start_game и следуйте инструкциям \n' \
@@ -384,6 +406,8 @@ def rules(update, context):
 
 
 def check_message(update, context):
+    if dont_spam():
+        return
     group_id = update.effective_chat.id
     if group_id not in games:
         replied = update.effective_message.reply_to_message
@@ -491,6 +515,8 @@ def check_message(update, context):
 
 
 def check_callback(update, context):
+    if dont_spam():
+        return
     group_id = update.effective_chat.id
     user_id = update.effective_user.id
     callback = update.callback_query
@@ -542,6 +568,8 @@ def check_callback(update, context):
 
 
 def give_up(update, context):
+    if dont_spam():
+        return
     group_id = update.effective_chat.id
     if group_id not in games:
         return
@@ -554,6 +582,8 @@ def give_up(update, context):
 
 
 def start(update, context):
+    if dont_spam():
+        return
     if update.effective_chat.id < 0:
         context.bot.send_message(chat_id=update.effective_chat.id,
                                  text='Привет! Чтобы узнать, как играть со мной, напиши /rules',
@@ -566,6 +596,8 @@ def start(update, context):
 
 
 def get_stats(update, context):
+    if dont_spam():
+        return
     msg = 'Добавлений в группы: '
     msg += str(db.search(Query().groups.exists())[0]['groups']) + '\n'
     msg += 'Начато игр: '
@@ -601,6 +633,7 @@ callback_handler = CallbackQueryHandler(check_callback)
 dispatcher.add_handler(callback_handler)
 
 updater.start_polling()
+start_time = datetime.now()
 updater.bot.send_message(chat_id=COMMON_GROUP_ID, text='Игра на языке ' + 'ru' + ' началась!',
                          reply_markup=InlineKeyboardMarkup
                          ([[InlineKeyboardButton('Присоединиться', callback_data='join')],
