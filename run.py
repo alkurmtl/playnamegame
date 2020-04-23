@@ -297,7 +297,6 @@ def start_round(update, context, secondary=False):
     if len(game.leader_candidates) == 0:
         game.leader_candidates = set(game.participants.keys())
     leader = random.choice(tuple(game.leader_candidates))
-    game.leader_candidates.remove(leader)
     game.leader = leader
     phrases_amount = 6
     options = get_phrases(phrases_amount, game.lang)
@@ -437,7 +436,6 @@ def check_message(update, context):
                     game = games[group_id]
                     game.starter_id = update.effective_user.id
                     game.participants[update.effective_user] = 0
-                    game.leader_candidates.add(update.effective_user)
         return
     if group_id == COMMON_GROUP_ID and update.effective_message.text == WANNA_JOIN_STRING:
         join_game(update, context, secondary=True, callback_user=update.effective_user)
@@ -467,6 +465,7 @@ def check_message(update, context):
                 end_round(group_id)
                 start_round(update, context, secondary=True)
     elif update.effective_user in game.participants:
+        game.leader_candidates.add(update.effective_user)
         score = 0
         for word in text:
             norm_word = get_normal_form(word, game.lang)
@@ -560,6 +559,8 @@ def check_callback(update, context):
         game.timer = threading.Timer(300, restart_round, args=[update, context])
         game.timer.start()
         game.round_going = True
+        game.leader_candidates.clear()
+        game.leader_candidates.add(game.leader)
         for word in game.words:
             for root in get_roots(word, game.lang):
                 game.roots.append(root)
