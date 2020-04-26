@@ -70,12 +70,11 @@ def get_phrases(amount, lang):
         words = json.loads(req.read().decode('utf-8'))
         for word in words[lang].keys():
             res.append(word)
-            if len(res) == amount:
-                break
     except (HTTPError, json.JSONDecodeError) as e:
         for i in range(amount):
             res.append(get_phrase(lang))
-    return res
+    random.shuffle(res)
+    return res[:amount]
 
 
 games = dict()
@@ -118,9 +117,9 @@ def normalize(s):
 
 def get_normal_form(s, lang):
     if lang == 'ru':
-        return morph.parse(s.lower())[0].normal_form
+        return normalize(morph.parse(s.lower())[0].normal_form)
     elif lang == 'en':
-        return nlp(s.lower())[0].lemma_
+        return normalize(nlp(s.lower())[0].lemma_)
 
 
 def get_roots(s, lang):
