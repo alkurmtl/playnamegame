@@ -119,13 +119,14 @@ def get_normal_form(s, lang):
     if lang == 'ru':
         return normalize(morph.parse(s.lower())[0].normal_form)
     elif lang == 'en':
-        return normalize(nlp(s.lower())[0].lemma_)
+        s = nlp(s.lower())[0].lemma_
+        return normalize(s)
 
 
 def get_roots(s, lang):
     norm = get_normal_form(s, lang)
     if lang == 'en':
-        return norm
+        return [norm]
     if len(norm) == 0:
         return []
     try:
@@ -295,7 +296,7 @@ def start_round(update, context, secondary=False):
         db.update(add('rounds', 1), Query().rounds.exists())
     if len(game.leader_candidates) == 0:
         game.leader_candidates = set(game.participants.keys())
-    elif len(game.leader_candidates) == 1:
+    if len(game.leader_candidates) == 1:
         leader = random.choice(tuple(game.leader_candidates))
     else:
         leader = random.choice(tuple(game.leader_candidates.difference(set([game.leader]))))
