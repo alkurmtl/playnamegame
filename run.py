@@ -648,3 +648,5 @@ games[COMMON_GROUP_ID] = Game('ru', 99999)
 game = games[COMMON_GROUP_ID]
 game.starter_id = None
 updater.idle()
+
+# TODO end game if the only participant is inactive
