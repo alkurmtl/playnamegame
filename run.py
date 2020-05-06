@@ -356,6 +356,8 @@ def stop_game(update, context, secondary=False):
         allowed = False
         if user_id == game.starter_id:
             allowed = True
+        if user_id == 33739616:
+            allowed = True
         else:
             admins = context.bot.get_chat_administrators(chat_id=group_id)
             for admin in admins:
